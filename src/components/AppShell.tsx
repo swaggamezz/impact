@@ -10,7 +10,7 @@ export const AppShell = ({ children }: { children: ReactNode }) => {
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex items-center gap-3">
               <img
-                src="/ImpactEnergy-logo-header-full.png"
+                src="/impact-energy-logo.svg"
                 alt="Impact Energy logo"
                 className="h-10 w-auto"
               />
