@@ -1,0 +1,102 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+:root {
+  --impact-blue: #0b5fa4;
+  --impact-navy: #0a2f57;
+  --impact-green: #7cc94b;
+  --impact-teal: #00a3a1;
+  --impact-ice: #e6f4f4;
+  --impact-ink: #0a2f57;
+  --impact-muted: #51657a;
+  --impact-shell: #f6fbfc;
+  color: var(--impact-ink);
+  background-color: var(--impact-shell);
+  text-rendering: optimizeLegibility;
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+body {
+  margin: 0;
+  min-height: 100vh;
+  font-family: 'Sora', 'Noto Sans', sans-serif;
+  background: linear-gradient(135deg, var(--impact-ice), #ffffff 65%);
+}
+
+#root {
+  min-height: 100vh;
+}
+
+@keyframes fade-up {
+  from {
+    opacity: 0;
+    transform: translateY(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fade-up {
+  animation: fade-up 0.5s ease-out both;
+}
+
+.animate-fade-up-delay {
+  animation: fade-up 0.6s ease-out 0.1s both;
+}
+
+@layer components {
+  .btn-primary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: #ffffff;
+    background: var(--impact-blue);
+    box-shadow: 0 10px 24px rgba(11, 95, 164, 0.22);
+    transition: background-color 0.2s ease, box-shadow 0.2s ease;
+  }
+  .btn-primary:hover {
+    background: var(--impact-navy);
+  }
+  .btn-primary:disabled {
+    background: #94a3b8;
+    cursor: not-allowed;
+    box-shadow: none;
+  }
+  .btn-secondary {
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    border-radius: 9999px;
+    padding: 0.625rem 1.25rem;
+    font-size: 0.875rem;
+    font-weight: 600;
+    color: var(--impact-navy);
+    background: #ffffff;
+    border: 1px solid #cbd5e1;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  .btn-secondary:hover {
+    border-color: var(--impact-blue);
+    color: var(--impact-blue);
+  }
+  .btn-ghost {
+    border-radius: 9999px;
+    padding: 0.5rem 1rem;
+    font-size: 0.75rem;
+    font-weight: 600;
+    color: var(--impact-blue);
+    border: 1px solid transparent;
+    transition: border-color 0.2s ease, color 0.2s ease;
+  }
+  .btn-ghost:hover {
+    border-color: rgba(11, 95, 164, 0.35);
+  }
+}

@@ -1,0 +1,14 @@
+<svg width="220" height="60" viewBox="0 0 220 60" xmlns="http://www.w3.org/2000/svg">
+  <rect width="220" height="60" fill="none" />
+  <g transform="translate(6,10)">
+    <polygon points="10,20 30,0 50,20 30,40" fill="#0b5fa4"/>
+    <polygon points="30,20 50,0 70,20 50,40" fill="#00a3a1" opacity="0.9"/>
+    <polygon points="50,20 70,0 90,20 70,40" fill="#7cc94b" opacity="0.9"/>
+  </g>
+  <text x="100" y="28" font-family="Sora, Arial, sans-serif" font-size="22" font-weight="700" fill="#0a2f57">
+    impact
+  </text>
+  <text x="100" y="46" font-family="Sora, Arial, sans-serif" font-size="12" font-weight="600" fill="#00a3a1">
+    energy
+  </text>
+</svg>
