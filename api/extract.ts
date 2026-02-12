@@ -188,6 +188,64 @@ const normalizeBoolean = (value: unknown, fallback: boolean) => {
   return fallback
 }
 
+const findEanCodes = (text: string) => {
+  const matches = text.match(/(?:\d[\s-]?){18}/g) ?? []
+  return Array.from(
+    new Set(
+      matches
+        .map((match) => match.replace(/\D/g, ''))
+        .filter((value) => value.length === 18),
+    ),
+  )
+}
+
+const expandConnectionsByEans = (
+  connections: AnyRecord[],
+  eans: string[],
+  source?: string,
+) => {
+  const uniqueEans = Array.from(new Set(eans)).filter(Boolean)
+  if (uniqueEans.length === 0) return connections
+
+  if (connections.length === 0) {
+    return uniqueEans.map((ean) =>
+      normalizeConnection({ eanCode: ean }, source),
+    )
+  }
+
+  if (connections.length === 1 && uniqueEans.length > 1) {
+    const base = connections[0]
+    return uniqueEans.map((ean) => ({ ...base, eanCode: ean }))
+  }
+
+  const existing = new Set(
+    connections
+      .map((connection) =>
+        typeof connection.eanCode === 'string'
+          ? connection.eanCode.replace(/\D/g, '')
+          : '',
+      )
+      .filter(Boolean),
+  )
+  const remaining = uniqueEans.filter((ean) => !existing.has(ean))
+  const updated = connections.map((connection) => {
+    if (!connection.eanCode && remaining.length > 0) {
+      const ean = remaining.shift()
+      if (ean) return { ...connection, eanCode: ean }
+    }
+    return connection
+  })
+
+  if (remaining.length > 0) {
+    const base = connections[0]
+    for (const ean of remaining) {
+      updated.push({ ...base, eanCode: ean })
+    }
+  }
+
+  return updated
+}
+
 const normalizeConnection = (raw: unknown, defaultSource?: string) => {
   const input = isObject(raw) ? raw : {}
   const eanDigits = toCleanString(input.eanCode).replace(/\D/g, '')
@@ -396,6 +454,7 @@ Belangrijke regels:
 9) Factuuradres alleen als het duidelijk als factuuradres is gelabeld.
 10) Adressen met contextwoorden Leverancier, Netbeheerder, Afzender, Hoofdkantoor, Klantenservice zijn verdacht als leveringsadres.
 11) Als adres twijfelachtig is: vul addressWarning met "Adres mogelijk onjuist (kan leverancieradres zijn) - controleer."
+12) Als meerdere EAN-codes bij hetzelfde adres horen, maak meerdere connections met hetzelfde adres en eventuele gezamenlijke toelichting in notes.
 
 Geef ALLEEN geldige JSON terug zonder markdown.
 Formaat:
@@ -624,12 +683,32 @@ export default async function handler(request: Request) {
     })
   }
 
-  const result = pickConnections(
+  let result = pickConnections(
     extractedJson,
     allowMultiple,
     body.inputType,
     body.options?.source,
   )
+
+  if (allowMultiple && typeof body.text === 'string') {
+    const eans = findEanCodes(body.text)
+    if (eans.length > 1) {
+      const expanded = expandConnectionsByEans(
+        result.connections,
+        eans,
+        body.options?.source,
+      )
+      if (expanded.length !== result.connections.length) {
+        result = {
+          ...result,
+          connections: expanded,
+          warning:
+            result.warning ??
+            'Meerdere EAN-codes gevonden. Aansluitingen zijn opgesplitst.',
+        }
+      }
+    }
+  }
 
   return json(200, result)
 }
