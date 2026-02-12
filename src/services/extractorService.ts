@@ -997,6 +997,48 @@ export const extractConnectionsFromExcelFile = async (
   return { connections, unmappedHeaders, mappedHeaders }
 }
 
+export const excelFileToText = async (
+  file: File,
+  maxRows = 200,
+): Promise<{ text: string; truncatedRows: number }> => {
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  if (!sheetName) {
+    return { text: '', truncatedRows: 0 }
+  }
+  const sheet = workbook.Sheets[sheetName]
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: '',
+  })
+  if (rows.length === 0) {
+    return { text: '', truncatedRows: 0 }
+  }
+
+  const headers = Object.keys(rows[0])
+  const usableRows = rows.slice(0, maxRows)
+  const lines = usableRows.map((row, index) => {
+    const pairs = headers
+      .map((header) => {
+        const value = row[header]
+        const normalized =
+          value === null || value === undefined ? '' : String(value).trim()
+        return normalized ? `${header}: ${normalized}` : ''
+      })
+      .filter(Boolean)
+      .join(' | ')
+    return `Rij ${index + 1}: ${pairs}`
+  })
+  const truncatedRows = Math.max(0, rows.length - usableRows.length)
+  const text = [
+    `Excel sheet: ${sheetName}`,
+    `Kolommen: ${headers.join(', ')}`,
+    ...lines,
+  ].join('\n')
+
+  return { text, truncatedRows }
+}
+
 export const getKnownFields = () => ({
   products: CONNECTION_PRODUCTS,
   marketSegments: MARKET_SEGMENTS,

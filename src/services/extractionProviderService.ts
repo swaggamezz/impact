@@ -176,11 +176,7 @@ const extractPdfLocally = async (
     )
   })
   emitProgress(onProgress, 'extracting', 0.9, 'Bezig met extractie')
-  const connections = extractFromTextLocally(result.text, {
-    ...options,
-    allowMultiple: false,
-    splitMode: 'none',
-  })
+  const connections = extractFromTextLocally(result.text, options)
   emitProgress(onProgress, 'done', 1, 'Klaar')
   return { connections }
 }
@@ -291,11 +287,7 @@ const extractPdfWithAi = async (
       inputType: 'text',
       text: ocr.text,
       fileName: file.name,
-      options: {
-        ...options,
-        allowMultiple: false,
-        splitMode: 'none',
-      },
+      options,
     })
     const parsed = parseAiResponse(data)
     emitProgress(onProgress, 'done', 1, 'Klaar')
@@ -309,11 +301,7 @@ const extractPdfWithAi = async (
     inputType: 'pdf_pages',
     fileName: file.name,
     pages,
-    options: {
-      ...options,
-      allowMultiple: false,
-      splitMode: 'none',
-    },
+    options,
   })
   const parsed = parseAiResponse(data)
   emitProgress(onProgress, 'done', 1, 'Klaar')
@@ -386,16 +374,11 @@ export const extractConnectionsFromPdfWithProvider = async (
   options: ExtractionOptions,
   onProgress?: ProgressHandler,
 ): Promise<ProviderResponse> => {
-  const fixedOptions: ExtractionOptions = {
-    ...options,
-    allowMultiple: false,
-    splitMode: 'none',
-  }
   if (getExtractionProvider() !== 'aiExtract') {
-    return extractPdfLocally(file, fixedOptions, onProgress)
+    return extractPdfLocally(file, options, onProgress)
   }
   return withAiFallback(
-    () => extractPdfWithAi(file, fixedOptions, onProgress),
-    () => extractPdfLocally(file, fixedOptions, onProgress),
+    () => extractPdfWithAi(file, options, onProgress),
+    () => extractPdfLocally(file, options, onProgress),
   )
 }

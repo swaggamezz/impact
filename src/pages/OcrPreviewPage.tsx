@@ -3,10 +3,15 @@ import { Link, useLocation, useNavigate } from 'react-router-dom'
 import { useReview } from '../contexts/reviewContext'
 import { useUploads } from '../contexts/uploadContext'
 import type { ConnectionDraft } from '../models/connection'
-import { extractConnectionsFromExcelFile } from '../services/extractorService'
+import {
+  excelFileToText,
+  extractConnectionsFromExcelFile,
+} from '../services/extractorService'
 import {
   extractConnectionsFromImageWithProvider,
   extractConnectionsFromPdfWithProvider,
+  extractConnectionsFromTextWithProvider,
+  getExtractionProvider,
 } from '../services/extractionProviderService'
 
 type FileStatus = {
@@ -306,8 +311,8 @@ export const OcrPreviewPage = () => {
                 file,
                 {
                   source: 'OCR_PDF',
-                  allowMultiple: false,
-                  splitMode: 'none',
+                  allowMultiple: true,
+                  splitMode: 'auto',
                 },
                 (progress) => {
                   updateStatus(key, {
@@ -336,6 +341,39 @@ export const OcrPreviewPage = () => {
             progress: 0.5,
             message: 'Bezig met extractie',
           })
+
+          if (getExtractionProvider() === 'aiExtract') {
+            const { text, truncatedRows } = await excelFileToText(file)
+            if (truncatedRows > 0) {
+              warnings.push(
+                `Excel ${file.name}: ${truncatedRows} rijen niet meegestuurd naar AI (limiet).`,
+              )
+            }
+            const { connections: extracted, warning } =
+              await extractConnectionsFromTextWithProvider(text, {
+                source: 'EXCEL',
+                allowMultiple: true,
+                splitMode: 'auto',
+              })
+            if (warning) {
+              warnings.push(`Excel ${file.name}: ${warning}`)
+            }
+            if (extracted.length > 0) {
+              newConnections.push(...extracted)
+              bySource.excel += extracted.length
+              updateStatus(key, {
+                status: 'done',
+                progress: 1,
+                resultCount: extracted.length,
+                message: 'Klaar',
+              })
+              return
+            }
+            warnings.push(
+              `Excel ${file.name}: AI gaf geen resultaat. Standaard Excel-import is gebruikt.`,
+            )
+          }
+
           const { connections, unmappedHeaders } =
             await extractConnectionsFromExcelFile(file)
           newConnections.push(...connections)
@@ -470,7 +508,7 @@ export const OcrPreviewPage = () => {
           PDF en Excel te halen. Na afloop ga je automatisch naar Controle.
         </p>
         <p className="mt-2 text-xs text-slate-500">
-          Elke PDF telt altijd als 1 aansluiting, ongeacht het aantal pagina's.
+          AI bepaalt hoeveel aansluitingen er per document in staan.
         </p>
         {hasUploads && (
           <div className="mt-4 rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">

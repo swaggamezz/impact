@@ -256,10 +256,7 @@ const pickConnections = (
   const rawArray = Array.isArray(candidate) ? candidate : candidate ? [candidate] : []
   let normalized = rawArray.map((item) => normalizeConnection(item, source))
 
-  // Business rule: a PDF always maps to exactly one connection.
-  if (inputType === 'pdf_pages') {
-    normalized = normalized.slice(0, 1)
-  } else if (!allowMultiple) {
+  if (!allowMultiple) {
     normalized = normalized.slice(0, 1)
   }
 
@@ -388,7 +385,7 @@ Impact Energy is GEEN energieleverancier. Zet leverancier nooit op "Impact Energ
 Doel: zet documentdata om naar gestructureerde JSON met aansluitgegevens.
 
 Belangrijke regels:
-1) Voor PDF-input geldt altijd EXACT 1 aansluiting.
+1) Een document kan meerdere aansluitingen bevatten. Als er meerdere EANs/energieproducten zijn, geef meerdere connections.
 2) Gebruik alleen informatie die echt in de input staat.
 3) Als iets ontbreekt: laat lege string of gebruik Onbekend waar passend.
 4) EAN: exact 18 cijfers (spaties/streepjes verwijderen).
@@ -518,7 +515,7 @@ export default async function handler(request: Request) {
 
   const openAiKey = process.env.OPENAI_API_KEY
   const groqKey = process.env.GROQ_API_KEY
-  const allowMultiple = body.options?.allowMultiple === true && body.inputType !== 'pdf_pages'
+  const allowMultiple = body.options?.allowMultiple === true
   let response: Response
 
   if (aiBackend === 'groq') {
