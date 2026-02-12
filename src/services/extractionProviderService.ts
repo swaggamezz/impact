@@ -8,7 +8,6 @@ import {
 
 export type ExtractionProvider = 'localOCR' | 'aiExtract'
 export type ExtractionStage = 'reading' | 'ocr' | 'extracting' | 'done'
-type AiBackend = 'openai' | 'groq'
 
 export interface ExtractionOptions {
   source: ConnectionSource
@@ -44,11 +43,6 @@ const normalizeConnections = (value: unknown) => {
 
 const getAiEndpoint = () =>
   (import.meta.env.VITE_AI_EXTRACT_ENDPOINT as string | undefined) ?? '/api/extract'
-
-const getAiBackend = (): AiBackend => {
-  const configured = (import.meta.env.VITE_AI_BACKEND as string | undefined) ?? 'openai'
-  return configured.toLowerCase() === 'groq' ? 'groq' : 'openai'
-}
 
 const sleep = (ms: number) =>
   new Promise<void>((resolve) => window.setTimeout(resolve, ms))
@@ -237,32 +231,9 @@ const extractImageWithAi = async (
   options: ExtractionOptions,
   onProgress?: ProgressHandler,
 ): Promise<ProviderResponse> => {
-  const backend = getAiBackend()
   emitProgress(onProgress, 'reading', 0.2, 'Bezig met lezen')
-  if (backend === 'groq') {
-    const ocr = await recognizeImage(file, (progress) => {
-      emitProgress(
-        onProgress,
-        'ocr',
-        0.2 + progress.progress * 0.5,
-        'Bezig met OCR',
-      )
-    })
-    emitProgress(onProgress, 'extracting', 0.8, 'Bezig met AI extractie')
-    const data = await callAiEndpoint({
-      inputType: 'text',
-      text: ocr.text,
-      fileName: file.name,
-      options,
-    })
-    const parsed = parseAiResponse(data)
-    emitProgress(onProgress, 'done', 1, 'Klaar')
-    return parsed
-  }
-
   const imageDataUrl = await optimizeImageDataUrl(file)
-  emitProgress(onProgress, 'ocr', 0.55, 'Bezig met OCR')
-  emitProgress(onProgress, 'extracting', 0.8, 'Bezig met extractie')
+  emitProgress(onProgress, 'extracting', 0.55, 'Bezig met AI-analyse')
   const data = await callAiEndpoint({
     inputType: 'image',
     fileName: file.name,
@@ -280,32 +251,9 @@ const extractPdfWithAi = async (
   options: ExtractionOptions,
   onProgress?: ProgressHandler,
 ): Promise<ProviderResponse> => {
-  const backend = getAiBackend()
   emitProgress(onProgress, 'reading', 0.1, 'Bezig met lezen')
-  if (backend === 'groq') {
-    const ocr = await recognizePdfFile(file, (progress) => {
-      emitProgress(
-        onProgress,
-        'ocr',
-        0.1 + progress.progress * 0.55,
-        `Bezig met OCR (${progress.status})`,
-      )
-    })
-    emitProgress(onProgress, 'extracting', 0.82, 'Bezig met AI extractie')
-    const data = await callAiEndpoint({
-      inputType: 'text',
-      text: ocr.text,
-      fileName: file.name,
-      options,
-    })
-    const parsed = parseAiResponse(data)
-    emitProgress(onProgress, 'done', 1, 'Klaar')
-    return parsed
-  }
-
   const pages = await renderPdfFileToImageDataUrls(file, 1.25, 0.8)
-  emitProgress(onProgress, 'ocr', 0.5, 'Bezig met OCR')
-  emitProgress(onProgress, 'extracting', 0.8, 'Bezig met extractie')
+  emitProgress(onProgress, 'extracting', 0.5, 'Bezig met AI-analyse')
   const data = await callAiEndpoint({
     inputType: 'pdf_pages',
     fileName: file.name,
@@ -317,21 +265,6 @@ const extractPdfWithAi = async (
   return parsed
 }
 
-const withAiFallback = async (
-  runAi: () => Promise<ProviderResponse>,
-  runLocal: () => Promise<ProviderResponse>,
-): Promise<ProviderResponse> => {
-  try {
-    return await runAi()
-  } catch {
-    const local = await runLocal()
-    return {
-      ...local,
-      warning: 'AI-extract is mislukt. Lokale OCR/extractie is automatisch gebruikt.',
-    }
-  }
-}
-
 export const extractConnectionsFromTextWithProvider = async (
   text: string,
   options: ExtractionOptions,
@@ -340,28 +273,12 @@ export const extractConnectionsFromTextWithProvider = async (
     return { connections: extractFromTextLocally(text, options) }
   }
 
-  try {
-    const data = await callAiEndpoint({
-      inputType: 'text',
-      text,
-      options,
-    })
-    const parsed = parseAiResponse(data)
-    if (parsed.connections.length > 0) {
-      return parsed
-    }
-    return {
-      connections: extractFromTextLocally(text, options),
-      warning:
-        'AI-extract gaf geen bruikbaar resultaat. Lokale OCR/extractie is gebruikt.',
-    }
-  } catch {
-    return {
-      connections: extractFromTextLocally(text, options),
-      warning:
-        'AI-extract is mislukt. Lokale OCR/extractie is automatisch gebruikt.',
-    }
-  }
+  const data = await callAiEndpoint({
+    inputType: 'text',
+    text,
+    options,
+  })
+  return parseAiResponse(data)
 }
 
 export const extractConnectionsFromImageWithProvider = async (
@@ -372,10 +289,7 @@ export const extractConnectionsFromImageWithProvider = async (
   if (getExtractionProvider() !== 'aiExtract') {
     return extractImageLocally(file, options, onProgress)
   }
-  return withAiFallback(
-    () => extractImageWithAi(file, options, onProgress),
-    () => extractImageLocally(file, options, onProgress),
-  )
+  return extractImageWithAi(file, options, onProgress)
 }
 
 export const extractConnectionsFromPdfWithProvider = async (
@@ -386,8 +300,5 @@ export const extractConnectionsFromPdfWithProvider = async (
   if (getExtractionProvider() !== 'aiExtract') {
     return extractPdfLocally(file, options, onProgress)
   }
-  return withAiFallback(
-    () => extractPdfWithAi(file, options, onProgress),
-    () => extractPdfLocally(file, options, onProgress),
-  )
+  return extractPdfWithAi(file, options, onProgress)
 }

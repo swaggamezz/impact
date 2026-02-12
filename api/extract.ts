@@ -352,30 +352,6 @@ const getResponseText = (responseJson: unknown) => {
   return collected.join('\n').trim()
 }
 
-const getChatCompletionText = (responseJson: unknown) => {
-  if (!isObject(responseJson)) return ''
-  const choices = responseJson.choices
-  if (!Array.isArray(choices)) return ''
-
-  const collected: string[] = []
-  for (const choice of choices) {
-    if (!isObject(choice) || !isObject(choice.message)) continue
-    const content = choice.message.content
-    if (typeof content === 'string') {
-      collected.push(content)
-      continue
-    }
-    if (!Array.isArray(content)) continue
-    for (const part of content) {
-      if (!isObject(part)) continue
-      if (typeof part.text === 'string') {
-        collected.push(part.text)
-      }
-    }
-  }
-  return collected.join('\n').trim()
-}
-
 const buildUserContent = (body: ExtractRequestBody) => {
   const content: Array<Record<string, unknown>> = []
   const options = body.options ?? {}
@@ -423,32 +399,6 @@ const buildUserContent = (body: ExtractRequestBody) => {
   }
 
   return content
-}
-
-const buildGroqUserText = (body: ExtractRequestBody) => {
-  const options = body.options ?? {}
-  const detectedEans =
-    body.inputType === 'text' && body.text
-      ? findEanCodes(body.text)
-      : []
-  const metadata = [
-    'Extracteer energie-aansluiting velden in JSON.',
-    `Bestand: ${body.fileName ?? 'onbekend'}`,
-    `InputType: ${body.inputType}`,
-    `allowMultiple: ${options.allowMultiple === true ? 'true' : 'false'}`,
-    `splitMode: ${options.splitMode ?? 'auto'}`,
-    `source: ${options.source ?? 'OCR_PHOTO'}`,
-    detectedEans.length > 0
-      ? `Detected EANs: ${detectedEans.join(', ')}`
-      : 'Detected EANs: none',
-  ].join('\n')
-
-  const textInput =
-    body.inputType === 'text' && body.text
-      ? body.text
-      : 'Geen expliciete tekst ontvangen.'
-
-  return `${metadata}\n\nDocumenttekst:\n${textInput}`
 }
 
 const SYSTEM_PROMPT = `
@@ -636,13 +586,6 @@ export default async function handler(request: Request) {
   }
 
   const aiBackend = getAiBackend()
-  if (aiBackend === 'groq' && body.inputType !== 'text') {
-    return json(400, {
-      error:
-        'Groq backend ondersteunt hier alleen text input. Zet VITE_AI_BACKEND=groq zodat frontend eerst OCR tekst stuurt.',
-    })
-  }
-
   const openAiKey = process.env.OPENAI_API_KEY
   const groqKey = process.env.GROQ_API_KEY
   const allowMultiple = body.options?.allowMultiple === true
@@ -656,25 +599,26 @@ export default async function handler(request: Request) {
       })
     }
 
-    const groqModel = process.env.GROQ_MODEL || 'llama-3.3-70b-versatile'
+    const groqModel =
+      process.env.GROQ_MODEL ||
+      'meta-llama/llama-4-scout-17b-16e-instruct'
     const groqRequestBody = {
       model: groqModel,
       temperature: 0,
-      max_tokens: 1800,
-      response_format: { type: 'json_object' },
-      messages: [
+      max_output_tokens: 1800,
+      input: [
         {
           role: 'system',
-          content: SYSTEM_PROMPT,
+          content: [{ type: 'input_text', text: SYSTEM_PROMPT }],
         },
         {
           role: 'user',
-          content: buildGroqUserText(body),
+          content: buildUserContent(body),
         },
       ],
     }
 
-    response = await fetch('https://api.groq.com/openai/v1/chat/completions', {
+    response = await fetch('https://api.groq.com/openai/v1/responses', {
       method: 'POST',
       headers: {
         'Content-Type': 'application/json',
@@ -737,10 +681,7 @@ export default async function handler(request: Request) {
   }
 
   const responseJson = (await response.json()) as unknown
-  const outputText =
-    aiBackend === 'groq'
-      ? getChatCompletionText(responseJson)
-      : getResponseText(responseJson)
+  const outputText = getResponseText(responseJson)
   if (!outputText) {
     return json(502, {
       error: 'AI gaf geen leesbare output terug.',
