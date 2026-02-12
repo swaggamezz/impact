@@ -44,6 +44,17 @@ const TELEMETRY_TYPE_OPTIONS = new Set([
   'Jaarbemeten',
   'Continu (kwartierwaarden)',
 ])
+const GRID_OPERATOR_OPTIONS = [
+  'Liander',
+  'Enexis',
+  'Stedin',
+  'TenneT',
+  'Coteq',
+  'Rendo',
+  'Westland Infra',
+  'Endinet',
+  'Overig',
+] as const
 
 const RATE_LIMIT_STORE = new Map<string, { count: number; resetAt: number }>()
 
@@ -188,6 +199,30 @@ const normalizeBoolean = (value: unknown, fallback: boolean) => {
   return fallback
 }
 
+const normalizeGridOperator = (value: unknown) => {
+  if (typeof value !== 'string') return ''
+  const trimmed = value.trim()
+  if (!trimmed) return ''
+  const normalized = trimmed.toLowerCase().replace(/[^a-z0-9]/g, '')
+  if (
+    ['anders', 'other', 'onbekend', 'unknown', 'nvt', 'overig', 'overige'].includes(
+      trimmed.toLowerCase(),
+    )
+  ) {
+    return trimmed.toLowerCase().startsWith('overig') ? 'Overig' : 'Anders'
+  }
+
+  for (const option of GRID_OPERATOR_OPTIONS) {
+    const optionNormalized = option.toLowerCase().replace(/[^a-z0-9]/g, '')
+    if (normalized === optionNormalized) return option
+    if (normalized.includes(optionNormalized) || optionNormalized.includes(normalized)) {
+      return option
+    }
+  }
+
+  return trimmed
+}
+
 const findEanCodes = (text: string) => {
   const matches = text.match(/(?:\d[\s-]?){18}/g) ?? []
   return Array.from(
@@ -284,7 +319,7 @@ const normalizeConnection = (raw: unknown, defaultSource?: string) => {
     invoiceHouseNumberAddition: toCleanString(input.invoiceHouseNumberAddition),
     invoicePostcode: toCleanString(input.invoicePostcode).toUpperCase(),
     invoiceCity: toCleanString(input.invoiceCity),
-    gridOperator: toCleanString(input.gridOperator),
+    gridOperator: normalizeGridOperator(input.gridOperator),
     supplier: supplierSafe,
     marketSegment: normalizeEnum(input.marketSegment, MARKET_SEGMENT_OPTIONS, 'Onbekend'),
     meterNumber: toCleanString(input.meterNumber),
