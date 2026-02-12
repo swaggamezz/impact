@@ -379,6 +379,10 @@ const getChatCompletionText = (responseJson: unknown) => {
 const buildUserContent = (body: ExtractRequestBody) => {
   const content: Array<Record<string, unknown>> = []
   const options = body.options ?? {}
+  const detectedEans =
+    body.inputType === 'text' && body.text
+      ? findEanCodes(body.text)
+      : []
 
   content.push({
     type: 'input_text',
@@ -389,6 +393,9 @@ const buildUserContent = (body: ExtractRequestBody) => {
       `allowMultiple: ${options.allowMultiple === true ? 'true' : 'false'}`,
       `splitMode: ${options.splitMode ?? 'auto'}`,
       `source: ${options.source ?? 'OCR_PHOTO'}`,
+      detectedEans.length > 0
+        ? `Detected EANs: ${detectedEans.join(', ')}`
+        : 'Detected EANs: none',
     ].join('\n'),
   })
 
@@ -420,6 +427,10 @@ const buildUserContent = (body: ExtractRequestBody) => {
 
 const buildGroqUserText = (body: ExtractRequestBody) => {
   const options = body.options ?? {}
+  const detectedEans =
+    body.inputType === 'text' && body.text
+      ? findEanCodes(body.text)
+      : []
   const metadata = [
     'Extracteer energie-aansluiting velden in JSON.',
     `Bestand: ${body.fileName ?? 'onbekend'}`,
@@ -427,6 +438,9 @@ const buildGroqUserText = (body: ExtractRequestBody) => {
     `allowMultiple: ${options.allowMultiple === true ? 'true' : 'false'}`,
     `splitMode: ${options.splitMode ?? 'auto'}`,
     `source: ${options.source ?? 'OCR_PHOTO'}`,
+    detectedEans.length > 0
+      ? `Detected EANs: ${detectedEans.join(', ')}`
+      : 'Detected EANs: none',
   ].join('\n')
 
   const textInput =
@@ -454,7 +468,8 @@ Belangrijke regels:
 9) Factuuradres alleen als het duidelijk als factuuradres is gelabeld.
 10) Adressen met contextwoorden Leverancier, Netbeheerder, Afzender, Hoofdkantoor, Klantenservice zijn verdacht als leveringsadres.
 11) Als adres twijfelachtig is: vul addressWarning met "Adres mogelijk onjuist (kan leverancieradres zijn) - controleer."
-12) Als meerdere EAN-codes bij hetzelfde adres horen, maak meerdere connections met hetzelfde adres en eventuele gezamenlijke toelichting in notes.
+12) Als er 3 EAN-codes staan, geef 3 connections (niet samenvoegen). Gebruik hetzelfde adres waar nodig.
+13) Als meerdere EAN-codes bij hetzelfde adres horen, maak meerdere connections met hetzelfde adres en eventuele gezamenlijke toelichting in notes.
 
 Geef ALLEEN geldige JSON terug zonder markdown.
 Formaat:
