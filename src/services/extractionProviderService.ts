@@ -187,6 +187,10 @@ const callAiEndpoint = async (payload: Record<string, unknown>) => {
     throw new Error('AI endpoint ontbreekt')
   }
 
+  const shouldDebug =
+    (import.meta.env.VITE_DEBUG_AI as string | undefined) === 'true' ||
+    import.meta.env.DEV === true
+
   const maxAttempts = 3
   for (let attempt = 1; attempt <= maxAttempts; attempt += 1) {
     const response = await fetch(endpoint, {
@@ -198,7 +202,12 @@ const callAiEndpoint = async (payload: Record<string, unknown>) => {
     })
 
     if (response.ok) {
-      return response.json()
+      const data = await response.json()
+      if (shouldDebug) {
+        // eslint-disable-next-line no-console
+        console.log('AI extract response', data)
+      }
+      return data
     }
 
     const details = await response.text()
