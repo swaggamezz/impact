@@ -35,6 +35,18 @@ const classifyFiles = (files: File[]) => {
       pdfs.push(file)
       continue
     }
+    if (type === 'text/csv' || name.endsWith('.csv')) {
+      excels.push(file)
+      continue
+    }
+    if (
+      type ===
+        'application/vnd.openxmlformats-officedocument.wordprocessingml.document' ||
+      name.endsWith('.docx')
+    ) {
+      excels.push(file)
+      continue
+    }
     if (
       type.includes('spreadsheet') ||
       name.endsWith('.xlsx') ||
@@ -66,7 +78,9 @@ export const UploadPage = () => {
   const canProceed = totalUploads > 0
   const photoLabel = `${photoFiles.length} foto${photoFiles.length === 1 ? '' : "'s"} geselecteerd`
   const pdfLabel = `${pdfFiles.length} PDF${pdfFiles.length === 1 ? '' : "'s"} geselecteerd`
-  const excelLabel = `${excelFiles.length} Excel-bestand${excelFiles.length === 1 ? '' : 'en'} geselecteerd`
+  const excelLabel = `${excelFiles.length} Excel/CSV/DOCX-bestand${
+    excelFiles.length === 1 ? '' : 'en'
+  } geselecteerd`
 
   const handleFilesSelected = (files: File[]) => {
     if (files.length === 0) return
@@ -78,7 +92,7 @@ export const UploadPage = () => {
       setNotice(
         `${skipped.length} bestand${
           skipped.length === 1 ? '' : 'en'
-        } kunnen we niet lezen. Gebruik JPG, PNG, HEIC, PDF of Excel.`,
+        } kunnen we niet lezen. Gebruik JPG, PNG, HEIC, PDF, XLSX, CSV of DOCX.`,
       )
     } else {
       setNotice(null)
@@ -93,7 +107,7 @@ export const UploadPage = () => {
         </p>
         <h2 className="mt-2 text-xl font-semibold sm:text-2xl">Upload bestanden</h2>
         <p className="mt-2 text-sm text-slate-600 sm:text-base">
-          Selecteer foto's, PDF's en Excel in 1 keer. De app herkent het type automatisch.
+          Selecteer foto's, PDF's en Excel/CSV/DOCX in 1 keer. De app herkent het type automatisch.
         </p>
         <div className="mt-6">
           <label
@@ -109,7 +123,7 @@ export const UploadPage = () => {
             id="upload-files"
             type="file"
             multiple
-            accept="image/*,.heic,application/pdf,.xlsx,.xls,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+            accept="image/*,.heic,application/pdf,.xlsx,.xls,.csv,.docx,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet,application/vnd.openxmlformats-officedocument.wordprocessingml.document,text/csv"
             className="hidden"
             onChange={(event) => {
               const files = Array.from(event.target.files ?? [])
@@ -119,7 +133,7 @@ export const UploadPage = () => {
           />
         </div>
         <p className="mt-3 text-xs text-slate-500">
-          Ondersteund: JPG, PNG, HEIC, PDF, XLSX.
+          Ondersteund: JPG, PNG, HEIC, PDF, XLSX, CSV, DOCX.
         </p>
         {notice && (
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">

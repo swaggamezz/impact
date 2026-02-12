@@ -4,8 +4,12 @@ import { useReview } from '../contexts/reviewContext'
 import { useUploads } from '../contexts/uploadContext'
 import type { ConnectionDraft } from '../models/connection'
 import {
+  csvFileToText,
+  docxFileToText,
   excelFileToText,
+  extractConnectionsFromCsvFile,
   extractConnectionsFromExcelFile,
+  extractConnectionsFromText,
 } from '../services/extractorService'
 import {
   extractConnectionsFromImageWithProvider,
@@ -342,36 +346,112 @@ export const OcrPreviewPage = () => {
             message: 'Bezig met extractie',
           })
 
+          const lowerName = file.name.toLowerCase()
+          const isCsv = lowerName.endsWith('.csv') || file.type.includes('csv')
+          const isDocx = lowerName.endsWith('.docx') ||
+            file.type.includes('wordprocessingml.document')
+          const label = isDocx ? 'DOCX' : isCsv ? 'CSV' : 'Excel'
+          let cachedDocText: { text: string; truncatedRows?: number; truncated?: boolean } | null = null
+
           if (getExtractionProvider() === 'aiExtract') {
-            const { text, truncatedRows } = await excelFileToText(file)
-            if (truncatedRows > 0) {
+            if (isDocx) {
+              const { text, truncated } = await docxFileToText(file)
+              cachedDocText = { text, truncated }
+              if (truncated) {
+                warnings.push(
+                  `${label} ${file.name}: tekst is ingekort voor AI (limiet).`,
+                )
+              }
+            } else if (isCsv) {
+              const { text, truncatedRows } = await csvFileToText(file)
+              cachedDocText = { text, truncatedRows }
+              if (truncatedRows > 0) {
+                warnings.push(
+                  `${label} ${file.name}: ${truncatedRows} rijen niet meegestuurd naar AI (limiet).`,
+                )
+              }
+            } else {
+              const { text, truncatedRows } = await excelFileToText(file)
+              cachedDocText = { text, truncatedRows }
+              if (truncatedRows > 0) {
+                warnings.push(
+                  `${label} ${file.name}: ${truncatedRows} rijen niet meegestuurd naar AI (limiet).`,
+                )
+              }
+            }
+
+            if (cachedDocText?.text) {
+              const { connections: extracted, warning } =
+                await extractConnectionsFromTextWithProvider(cachedDocText.text, {
+                  source: 'EXCEL',
+                  allowMultiple: true,
+                  splitMode: 'auto',
+                })
+              if (warning) {
+                warnings.push(`${label} ${file.name}: ${warning}`)
+              }
+              if (extracted.length > 0) {
+                newConnections.push(...extracted)
+                bySource.excel += extracted.length
+                updateStatus(key, {
+                  status: 'done',
+                  progress: 1,
+                  resultCount: extracted.length,
+                  message: 'Klaar',
+                })
+                return
+              }
               warnings.push(
-                `Excel ${file.name}: ${truncatedRows} rijen niet meegestuurd naar AI (limiet).`,
+                `${label} ${file.name}: AI gaf geen resultaat. We gebruiken een fallback.`,
+              )
+            } else {
+              warnings.push(
+                `${label} ${file.name}: geen leesbare tekst voor AI.`,
               )
             }
-            const { connections: extracted, warning } =
-              await extractConnectionsFromTextWithProvider(text, {
+          }
+
+          if (isCsv) {
+            const { connections, unmappedHeaders } =
+              await extractConnectionsFromCsvFile(file)
+            newConnections.push(...connections)
+            bySource.excel += connections.length
+            if (unmappedHeaders.length > 0) {
+              warnings.push(
+                `${label} ${file.name}: geen match voor kolommen ${unmappedHeaders.join(', ')}`,
+              )
+            }
+            updateStatus(key, {
+              status: 'done',
+              progress: 1,
+              resultCount: connections.length,
+              message: 'Klaar',
+            })
+            return
+          }
+
+          if (isDocx) {
+            if (!cachedDocText) {
+              const { text, truncated } = await docxFileToText(file)
+              cachedDocText = { text, truncated }
+            }
+            const connections = extractConnectionsFromText(
+              cachedDocText.text,
+              {
                 source: 'EXCEL',
                 allowMultiple: true,
                 splitMode: 'auto',
-              })
-            if (warning) {
-              warnings.push(`Excel ${file.name}: ${warning}`)
-            }
-            if (extracted.length > 0) {
-              newConnections.push(...extracted)
-              bySource.excel += extracted.length
-              updateStatus(key, {
-                status: 'done',
-                progress: 1,
-                resultCount: extracted.length,
-                message: 'Klaar',
-              })
-              return
-            }
-            warnings.push(
-              `Excel ${file.name}: AI gaf geen resultaat. Standaard Excel-import is gebruikt.`,
+              },
             )
+            newConnections.push(...connections)
+            bySource.excel += connections.length
+            updateStatus(key, {
+              status: 'done',
+              progress: 1,
+              resultCount: connections.length,
+              message: 'Klaar',
+            })
+            return
           }
 
           const { connections, unmappedHeaders } =
@@ -400,7 +480,7 @@ export const OcrPreviewPage = () => {
             )
           } else {
             errors.push(
-              `Dit Excel-bestand kunnen we niet lezen: ${file.name}. Controleer of het een .xlsx bestand is.`,
+              `Dit bestand kunnen we niet lezen: ${file.name}. Controleer of het een XLSX, CSV of DOCX is.`,
             )
           }
           updateStatus(key, {
@@ -505,7 +585,7 @@ export const OcrPreviewPage = () => {
         <h2 className="text-lg font-semibold">Detectie & OCR</h2>
         <p className="mt-2 text-sm text-slate-600">
           Controleer de uploads. Start de detectie om aansluitingen uit foto,
-          PDF en Excel te halen. Na afloop ga je automatisch naar Controle.
+          PDF en Excel/CSV/DOCX te halen. Na afloop ga je automatisch naar Controle.
         </p>
         <p className="mt-2 text-xs text-slate-500">
           AI bepaalt hoeveel aansluitingen er per document in staan.
@@ -580,7 +660,7 @@ export const OcrPreviewPage = () => {
               PDF OCR: {summary.bySource.pdf}
             </div>
             <div className="rounded-xl border border-slate-200 px-4 py-3 text-slate-600">
-              Excel import: {summary.bySource.excel}
+              Excel / CSV / DOCX: {summary.bySource.excel}
             </div>
           </div>
           {summary.warnings.length > 0 && (
@@ -630,7 +710,7 @@ export const OcrPreviewPage = () => {
           disableRemove={processing}
         />
         <FileList
-          title="Excel"
+          title="Excel / CSV / DOCX"
           files={excelFiles}
           statusMap={statusMap}
           onRemoveFile={removeFileFrom(excelFiles, setExcelFiles)}

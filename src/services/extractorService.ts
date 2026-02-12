@@ -1,4 +1,6 @@
 import * as XLSX from 'xlsx'
+import Papa from 'papaparse'
+import * as mammoth from 'mammoth/mammoth.browser'
 import {
   CONNECTION_PRODUCTS,
   MARKET_SEGMENTS,
@@ -855,61 +857,14 @@ const mapHeadersToFields = (headers: string[]) => {
   return mapping
 }
 
-const normalizeExcelValue = (field: ConnectionField, raw: unknown) => {
-  if (raw === null || raw === undefined) return ''
-  const value = String(raw).trim()
-  if (!value) return ''
-  switch (field) {
-    case 'eanCode':
-      return normalizeEAN(value)
-    case 'deliveryPostcode':
-    case 'invoicePostcode':
-      return normalizePostcode(value)
-    case 'kvkNumber':
-      return value.replace(/\D/g, '')
-    case 'product': {
-      return normalizeProduct(value) ?? value
-    }
-    case 'marketSegment': {
-      return normalizeMarketSegment(value) ?? value
-    }
-    case 'telemetryType': {
-      return normalizeTelemetry(value)
-    }
-    case 'telemetryCode': {
-      return normalizeTelemetryCode(value)
-    }
-    case 'iban': {
-      return normalizeIban(value)
-    }
-    case 'invoiceSameAsDelivery': {
-      const normalized = value.toLowerCase()
-      if (['ja', 'yes', 'true', '1'].includes(normalized)) return true
-      if (['nee', 'no', 'false', '0'].includes(normalized)) return false
-      return ''
-    }
-    default:
-      return value
-  }
-}
-
-export const extractConnectionsFromExcelFile = async (
-  file: File,
-): Promise<{
+const mapRowsToConnections = (
+  rows: Record<string, unknown>[],
+  source: ConnectionSource,
+): {
   connections: ConnectionDraft[]
   unmappedHeaders: string[]
   mappedHeaders: Record<string, ConnectionField>
-}> => {
-  const buffer = await file.arrayBuffer()
-  const workbook = XLSX.read(buffer, { type: 'array' })
-  const sheetName = workbook.SheetNames[0]
-  if (!sheetName) {
-    return { connections: [], unmappedHeaders: [], mappedHeaders: {} }
-  }
-  const sheet = workbook.Sheets[sheetName]
-  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
-    defval: '',
-  })
+} => {
   if (rows.length === 0) {
     return { connections: [], unmappedHeaders: [], mappedHeaders: {} }
   }
@@ -925,7 +880,7 @@ export const extractConnectionsFromExcelFile = async (
   }
 
   const connections = rows.map((row) => {
-    const draft = createDraftConnection('EXCEL')
+    const draft = createDraftConnection(source)
     const mutableDraft = draft as Record<string, unknown>
     for (const header of headers) {
       const field = mapping[header]
@@ -997,6 +952,64 @@ export const extractConnectionsFromExcelFile = async (
   return { connections, unmappedHeaders, mappedHeaders }
 }
 
+const normalizeExcelValue = (field: ConnectionField, raw: unknown) => {
+  if (raw === null || raw === undefined) return ''
+  const value = String(raw).trim()
+  if (!value) return ''
+  switch (field) {
+    case 'eanCode':
+      return normalizeEAN(value)
+    case 'deliveryPostcode':
+    case 'invoicePostcode':
+      return normalizePostcode(value)
+    case 'kvkNumber':
+      return value.replace(/\D/g, '')
+    case 'product': {
+      return normalizeProduct(value) ?? value
+    }
+    case 'marketSegment': {
+      return normalizeMarketSegment(value) ?? value
+    }
+    case 'telemetryType': {
+      return normalizeTelemetry(value)
+    }
+    case 'telemetryCode': {
+      return normalizeTelemetryCode(value)
+    }
+    case 'iban': {
+      return normalizeIban(value)
+    }
+    case 'invoiceSameAsDelivery': {
+      const normalized = value.toLowerCase()
+      if (['ja', 'yes', 'true', '1'].includes(normalized)) return true
+      if (['nee', 'no', 'false', '0'].includes(normalized)) return false
+      return ''
+    }
+    default:
+      return value
+  }
+}
+
+export const extractConnectionsFromExcelFile = async (
+  file: File,
+): Promise<{
+  connections: ConnectionDraft[]
+  unmappedHeaders: string[]
+  mappedHeaders: Record<string, ConnectionField>
+}> => {
+  const buffer = await file.arrayBuffer()
+  const workbook = XLSX.read(buffer, { type: 'array' })
+  const sheetName = workbook.SheetNames[0]
+  if (!sheetName) {
+    return { connections: [], unmappedHeaders: [], mappedHeaders: {} }
+  }
+  const sheet = workbook.Sheets[sheetName]
+  const rows = XLSX.utils.sheet_to_json<Record<string, unknown>>(sheet, {
+    defval: '',
+  })
+  return mapRowsToConnections(rows, 'EXCEL')
+}
+
 export const excelFileToText = async (
   file: File,
   maxRows = 200,
@@ -1037,6 +1050,83 @@ export const excelFileToText = async (
   ].join('\n')
 
   return { text, truncatedRows }
+}
+
+export const csvFileToText = async (
+  file: File,
+  maxRows = 200,
+): Promise<{ text: string; truncatedRows: number }> => {
+  const content = await file.text()
+  const parsed = Papa.parse<Record<string, unknown>>(content, {
+    header: true,
+    skipEmptyLines: true,
+  })
+  const parsedRows = (parsed.data ?? []) as Record<string, unknown>[]
+  const rows = parsedRows.filter((row) =>
+    Object.values(row ?? {}).some((value) =>
+      String(value ?? '').trim(),
+    ),
+  )
+  if (rows.length === 0) {
+    return { text: '', truncatedRows: 0 }
+  }
+  const headers = Object.keys(rows[0])
+  const usableRows = rows.slice(0, maxRows)
+  const lines = usableRows.map((row, index) => {
+    const pairs = headers
+      .map((header) => {
+        const value = row[header]
+        const normalized =
+          value === null || value === undefined ? '' : String(value).trim()
+        return normalized ? `${header}: ${normalized}` : ''
+      })
+      .filter(Boolean)
+      .join(' | ')
+    return `Rij ${index + 1}: ${pairs}`
+  })
+  const truncatedRows = Math.max(0, rows.length - usableRows.length)
+  const text = [
+    'CSV-bestand',
+    `Kolommen: ${headers.join(', ')}`,
+    ...lines,
+  ].join('\n')
+
+  return { text, truncatedRows }
+}
+
+export const extractConnectionsFromCsvFile = async (
+  file: File,
+): Promise<{
+  connections: ConnectionDraft[]
+  unmappedHeaders: string[]
+  mappedHeaders: Record<string, ConnectionField>
+}> => {
+  const content = await file.text()
+  const parsed = Papa.parse<Record<string, unknown>>(content, {
+    header: true,
+    skipEmptyLines: true,
+  })
+  const parsedRows = (parsed.data ?? []) as Record<string, unknown>[]
+  const rows = parsedRows.filter((row) =>
+    Object.values(row ?? {}).some((value) =>
+      String(value ?? '').trim(),
+    ),
+  )
+  return mapRowsToConnections(rows, 'EXCEL')
+}
+
+export const docxFileToText = async (
+  file: File,
+  maxChars = 240000,
+): Promise<{ text: string; truncated: boolean }> => {
+  const buffer = await file.arrayBuffer()
+  const result = await mammoth.extractRawText({ arrayBuffer: buffer })
+  const raw = result.value ?? ''
+  const normalized = raw.replace(/\r\n/g, '\n').trim()
+  if (normalized.length > maxChars) {
+    return { text: normalized.slice(0, maxChars), truncated: true }
+  }
+  return { text: normalized, truncated: false }
 }
 
 export const getKnownFields = () => ({
