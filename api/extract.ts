@@ -385,6 +385,7 @@ const buildUserContent = (body: ExtractRequestBody) => {
   if (body.inputType === 'image' && body.imageDataUrl) {
     content.push({
       type: 'input_image',
+      detail: 'auto',
       image_url: body.imageDataUrl,
     })
   }
@@ -393,12 +394,40 @@ const buildUserContent = (body: ExtractRequestBody) => {
     for (const page of body.pages) {
       content.push({
         type: 'input_image',
+        detail: 'auto',
         image_url: page,
       })
     }
   }
 
   return content
+}
+
+const buildUserTextPrompt = (body: ExtractRequestBody) => {
+  const options = body.options ?? {}
+  const detectedEans =
+    body.inputType === 'text' && body.text
+      ? findEanCodes(body.text)
+      : []
+
+  const header = [
+    'Extracteer energie-aansluiting velden in JSON.',
+    `Bestand: ${body.fileName ?? 'onbekend'}`,
+    `InputType: ${body.inputType}`,
+    `allowMultiple: ${options.allowMultiple === true ? 'true' : 'false'}`,
+    `splitMode: ${options.splitMode ?? 'auto'}`,
+    `source: ${options.source ?? 'OCR_PHOTO'}`,
+    detectedEans.length > 0
+      ? `Detected EANs: ${detectedEans.join(', ')}`
+      : 'Detected EANs: none',
+  ].join('\n')
+
+  const textInput =
+    body.inputType === 'text' && body.text
+      ? body.text
+      : 'Geen expliciete tekst ontvangen.'
+
+  return `${header}\n\nDocumenttekst:\n${textInput}`
 }
 
 const SYSTEM_PROMPT = `
@@ -602,20 +631,33 @@ export default async function handler(request: Request) {
     const groqModel =
       process.env.GROQ_MODEL ||
       'meta-llama/llama-4-scout-17b-16e-instruct'
+    const groqInput =
+      body.inputType === 'text'
+        ? [
+            {
+              role: 'system',
+              content: SYSTEM_PROMPT,
+            },
+            {
+              role: 'user',
+              content: buildUserTextPrompt(body),
+            },
+          ]
+        : [
+            {
+              role: 'system',
+              content: SYSTEM_PROMPT,
+            },
+            {
+              role: 'user',
+              content: buildUserContent(body),
+            },
+          ]
     const groqRequestBody = {
       model: groqModel,
       temperature: 0,
       max_output_tokens: 1800,
-      input: [
-        {
-          role: 'system',
-          content: [{ type: 'input_text', text: SYSTEM_PROMPT }],
-        },
-        {
-          role: 'user',
-          content: buildUserContent(body),
-        },
-      ],
+      input: groqInput,
     }
 
     response = await fetch('https://api.groq.com/openai/v1/responses', {
