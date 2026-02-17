@@ -74,6 +74,30 @@ const pickFirstString = (...values: Array<unknown>) => {
   return undefined
 }
 
+const formatPersonName = (person?: {
+  voornamen?: string
+  voorletters?: string
+  achternaam?: string
+  geslachtsnaam?: string
+  voorvoegsel?: string
+  volledigeNaam?: string
+  naam?: string
+}) => {
+  if (!person) return undefined
+  const direct =
+    person.volledigeNaam ??
+    person.naam ??
+    undefined
+  if (direct && direct.trim()) return direct.trim()
+
+  const surname = person.achternaam ?? person.geslachtsnaam ?? ''
+  const prefix = person.voorvoegsel ?? ''
+  const given = person.voornamen ?? person.voorletters ?? ''
+  const parts = [given, prefix, surname].filter((part) => part && part.trim())
+  if (parts.length === 0) return undefined
+  return parts.join(' ').replace(/\s+/g, ' ').trim()
+}
+
 const mapAddress = (address?: {
   type?: string
   straatnaam?: string
@@ -382,7 +406,55 @@ export default async function handler(request: Request) {
     if (companyActive === 'inactive') {
       warnings.push('Bedrijf niet actief.')
     }
-    warnings.push('Geen tekenbevoegde gegevens beschikbaar.')
+    const embeddedAny = data._embedded as
+      | { eigenaar?: Record<string, unknown> }
+      | undefined
+    const ownerAny = embeddedAny?.eigenaar as
+      | {
+          naam?: string
+          handelsnaam?: string
+          statutaireNaam?: string
+          naamPersoon?: {
+            voornamen?: string
+            voorletters?: string
+            achternaam?: string
+            geslachtsnaam?: string
+            voorvoegsel?: string
+            volledigeNaam?: string
+            naam?: string
+          }
+        }
+      | undefined
+
+    const ownerCandidate = pickFirstString(
+      ownerAny?.naam,
+      ownerAny?.handelsnaam,
+      ownerAny?.statutaireNaam,
+    )
+
+    const ownerPersonName = formatPersonName(ownerAny?.naamPersoon)
+
+    const fallbackOwnerName =
+      ownerCandidate ??
+      ownerPersonName ??
+      data.statutaireNaam ??
+      data.naam ??
+      tradeNames[0] ??
+      ''
+
+    const signatories =
+      fallbackOwnerName.trim().length > 0
+        ? [
+            {
+              name: fallbackOwnerName,
+              role: 'Eigenaar (KVK)',
+            },
+          ]
+        : []
+
+    if (signatories.length === 0) {
+      warnings.push('Geen tekenbevoegde gegevens beschikbaar.')
+    }
 
     const contactSource =
       vestigingContact ??
@@ -401,7 +473,7 @@ export default async function handler(request: Request) {
       companyActive,
       mainVisitingAddress: visitingAddress,
       postalAddress: postalAddress,
-      signatories: [],
+      signatories,
       establishments,
       warnings,
       contactEmail: pickFirstString(
