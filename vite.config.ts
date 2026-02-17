@@ -83,5 +83,8 @@ export default defineConfig(({ mode }) => {
       createDevApiPlugin('/api/kvk/search', kvkSearchHandler),
       createDevApiPlugin('/api/kvk/profile', kvkProfileHandler),
     ],
+    build: {
+      chunkSizeWarningLimit: 1500,
+    },
   }
 })
