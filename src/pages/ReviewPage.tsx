@@ -159,8 +159,8 @@ export const ReviewPage = () => {
     field: keyof ConnectionDraft,
     value: string | boolean,
   ) => {
-    setPendingConnections(
-      pendingConnections.map((connection) =>
+    setPendingConnections((prev) =>
+      prev.map((connection) =>
         connection.id === id
           ? {
               ...connection,

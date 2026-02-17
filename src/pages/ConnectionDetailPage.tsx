@@ -75,7 +75,6 @@ export const ConnectionDetailPage = () => {
   )
 
   const handleChange = (field: keyof ConnectionDraft, value: string | boolean) => {
-    if (!connection) return
     let nextValue: string | boolean = value
     if (
       typeof value === 'string' &&
@@ -83,7 +82,7 @@ export const ConnectionDetailPage = () => {
     ) {
       nextValue = value.toUpperCase()
     }
-    setConnection({ ...connection, [field]: nextValue })
+    setConnection((prev) => (prev ? { ...prev, [field]: nextValue } : prev))
   }
 
   const handleSave = async () => {
