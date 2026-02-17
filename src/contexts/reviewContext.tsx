@@ -18,7 +18,11 @@ type PendingState = {
 }
 
 interface ReviewContextValue extends PendingState {
-  setPendingConnections: (connections: ConnectionDraft[]) => void
+  setPendingConnections: (
+    connections:
+      | ConnectionDraft[]
+      | ((prev: ConnectionDraft[]) => ConnectionDraft[]),
+  ) => void
   setPendingReport: (report: PendingReport | null) => void
   clearPending: () => void
 }
