@@ -21,6 +21,12 @@ const JSON_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 } as const
 
+const FETCH_TIMEOUT_MS = 8000
+
+export const config = {
+  runtime: 'edge',
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
@@ -88,12 +94,25 @@ export default async function handler(request: Request) {
       return json(500, { error: 'KVK_API_KEY ontbreekt op de server.' })
     }
 
-    const response = await fetch(
-      `${getBaseUrl()}/v1/basisprofielen/${kvkNumber}`,
-      {
-        headers: { apikey: apiKey },
-      },
-    )
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await fetch(
+        `${getBaseUrl()}/v1/basisprofielen/${kvkNumber}`,
+        {
+          headers: { apikey: apiKey },
+          signal: controller.signal,
+        },
+      )
+    } catch (error) {
+      if ((error as DOMException).name === 'AbortError') {
+        return json(504, { error: 'KVK profiel duurde te lang.' })
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (response.status === 404) {
       return json(404, { error: 'Geen KVK-profiel gevonden.' })

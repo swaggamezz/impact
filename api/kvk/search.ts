@@ -14,6 +14,12 @@ const JSON_HEADERS = {
   'Access-Control-Allow-Headers': 'Content-Type,Authorization',
 } as const
 
+const FETCH_TIMEOUT_MS = 8000
+
+export const config = {
+  runtime: 'edge',
+}
+
 const json = (status: number, body: unknown) =>
   new Response(JSON.stringify(body), {
     status,
@@ -73,12 +79,25 @@ export default async function handler(request: Request) {
     params.set('resultatenPerPagina', String(limit))
     params.set('pagina', '1')
 
-    const response = await fetch(
-      `${getBaseUrl()}/v2/zoeken?${params.toString()}`,
-      {
-        headers: { apikey: apiKey },
-      },
-    )
+    const controller = new AbortController()
+    const timeout = setTimeout(() => controller.abort(), FETCH_TIMEOUT_MS)
+    let response: Response
+    try {
+      response = await fetch(
+        `${getBaseUrl()}/v2/zoeken?${params.toString()}`,
+        {
+          headers: { apikey: apiKey },
+          signal: controller.signal,
+        },
+      )
+    } catch (error) {
+      if ((error as DOMException).name === 'AbortError') {
+        return json(504, { error: 'KVK zoeken duurde te lang.' })
+      }
+      throw error
+    } finally {
+      clearTimeout(timeout)
+    }
 
     if (response.status === 404) {
       return json(200, { items: [] })
