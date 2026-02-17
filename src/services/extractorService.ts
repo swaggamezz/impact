@@ -45,6 +45,21 @@ const LABEL_ALIASES: Record<ConnectionField, string[]> = {
     'klant',
     'naam klant',
   ],
+  legalName: [
+    'juridische naam',
+    'legal name',
+    'statutaire naam',
+  ],
+  tradeName: [
+    'handelsnaam',
+    'trade name',
+  ],
+  companyActive: [
+    'status bedrijf',
+    'actief',
+    'inactief',
+    'active status',
+  ],
   kvkNumber: ['kvk', 'kvk nummer', 'kvk-nummer', 'kvk nr'],
   iban: ['iban', 'rekeningnummer', 'account number', 'bankrekening'],
   authorizedSignatory: [
@@ -53,7 +68,17 @@ const LABEL_ALIASES: Record<ConnectionField, string[]> = {
     'tekenbevoegde volgens kvk',
     'vertegenwoordiger',
   ],
+  authorizedSignatoryRole: [
+    'rol tekenbevoegde',
+    'functie tekenbevoegde',
+    'signatory role',
+  ],
   legalForm: ['rechtsvorm', 'juridische vorm', 'legal form'],
+  contactEmail: ['contact email', 'e-mail contact', 'email contact', 'email'],
+  contactPhone: ['contact telefoon', 'telefoon', 'phone', 'telefoonnummer'],
+  website: ['website', 'web', 'url'],
+  invoiceEmail: ['factuur email', 'factuur e-mail', 'billing email'],
+  vatNumber: ['btw', 'btw nummer', 'vat', 'vat number'],
   department: ['afdeling', 'department', 'dept'],
   deliveryStreet: ['straat', 'straatnaam', 'straat naam', 'adres straat'],
   deliveryHouseNumber: ['huisnummer', 'huis nummer', 'hnr', 'nr', 'huisnr', 'huis nr'],
@@ -976,6 +1001,23 @@ const normalizeExcelValue = (field: ConnectionField, raw: unknown) => {
     }
     case 'telemetryCode': {
       return normalizeTelemetryCode(value)
+    }
+    case 'companyActive': {
+      const normalized = value.toLowerCase()
+      if (['active', 'actief', 'ja', 'yes', 'true', '1'].includes(normalized)) {
+        return 'active'
+      }
+      if (
+        ['inactive', 'inactief', 'nee', 'no', 'false', '0', 'gesloten'].includes(
+          normalized,
+        )
+      ) {
+        return 'inactive'
+      }
+      if (['unknown', 'onbekend', 'nvt', 'n.v.t.'].includes(normalized)) {
+        return 'unknown'
+      }
+      return value
     }
     case 'iban': {
       return normalizeIban(value)

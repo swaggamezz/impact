@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useRef, useState, type ChangeEvent } from 'react'
 import {
   CONNECTION_PRODUCTS,
+  COMPANY_ACTIVE_OPTIONS,
   MARKET_SEGMENTS,
   REQUIRED_FIELDS,
   TELEMETRY_CODE_UNKNOWN,
@@ -44,6 +45,12 @@ const GRID_OPERATORS = [
 ] as const
 const GRID_OPERATOR_OTHER_VALUE = '__other__'
 type LookupStatus = 'idle' | 'loading' | 'success' | 'notfound' | 'error'
+
+const COMPANY_ACTIVE_LABELS: Record<string, string> = {
+  active: 'Actief',
+  inactive: 'Niet actief',
+  unknown: 'Onbekend',
+}
 
 const inputClassName = (hasError?: boolean) =>
   `w-full rounded-xl border px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200 ${
@@ -315,6 +322,12 @@ export const ConnectionForm = ({
             <KvkLookupWizard onApply={applyKvkProfile} />
           </div>
 
+          <div className="sm:col-span-2 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Bedrijf
+            </p>
+          </div>
+
           <FormField
             label="KvK-nummer"
             htmlFor="kvkNumber"
@@ -336,6 +349,40 @@ export const ConnectionForm = ({
           </FormField>
 
           <FormField
+            label="Juridische naam (legal name)"
+            htmlFor="legalName"
+            error={getError('legalName')}
+            warning={getWarning('legalName')}
+            confidence={getConfidence('legalName')}
+          >
+            <input
+              id="legalName"
+              name="legalName"
+              value={value.legalName ?? ''}
+              onChange={(event) => onChange('legalName', event.target.value)}
+              placeholder="Statutaire naam"
+              className={inputClassName(!!getError('legalName'))}
+            />
+          </FormField>
+
+          <FormField
+            label="Handelsnaam"
+            htmlFor="tradeName"
+            error={getError('tradeName')}
+            warning={getWarning('tradeName')}
+            confidence={getConfidence('tradeName')}
+          >
+            <input
+              id="tradeName"
+              name="tradeName"
+              value={value.tradeName ?? ''}
+              onChange={(event) => onChange('tradeName', event.target.value)}
+              placeholder="Naam waaronder het bedrijf handelt"
+              className={inputClassName(!!getError('tradeName'))}
+            />
+          </FormField>
+
+          <FormField
             label="Rechtsvorm"
             htmlFor="legalForm"
             error={getError('legalForm')}
@@ -350,6 +397,29 @@ export const ConnectionForm = ({
               placeholder="Bijv. BV, VOF, Stichting"
               className={inputClassName(!!getError('legalForm'))}
             />
+          </FormField>
+
+          <FormField
+            label="Status bedrijf"
+            htmlFor="companyActive"
+            error={getError('companyActive')}
+            warning={getWarning('companyActive')}
+            confidence={getConfidence('companyActive')}
+          >
+            <select
+              id="companyActive"
+              name="companyActive"
+              value={value.companyActive ?? ''}
+              onChange={(event) => onChange('companyActive', event.target.value)}
+              className={inputClassName(!!getError('companyActive'))}
+            >
+              <option value="">Onbekend</option>
+              {COMPANY_ACTIVE_OPTIONS.map((option) => (
+                <option key={option} value={option}>
+                  {COMPANY_ACTIVE_LABELS[option] ?? option}
+                </option>
+              ))}
+            </select>
           </FormField>
 
           <FormField
@@ -388,6 +458,122 @@ export const ConnectionForm = ({
               }
               placeholder="Naam tekenbevoegde"
               className={inputClassName(!!getError('authorizedSignatory'))}
+            />
+          </FormField>
+
+          <FormField
+            label="Rol tekenbevoegde"
+            htmlFor="authorizedSignatoryRole"
+            error={getError('authorizedSignatoryRole')}
+            warning={getWarning('authorizedSignatoryRole')}
+            confidence={getConfidence('authorizedSignatoryRole')}
+          >
+            <input
+              id="authorizedSignatoryRole"
+              name="authorizedSignatoryRole"
+              value={value.authorizedSignatoryRole ?? ''}
+              onChange={(event) =>
+                onChange('authorizedSignatoryRole', event.target.value)
+              }
+              placeholder="Bijv. directeur, procuratiehouder"
+              className={inputClassName(!!getError('authorizedSignatoryRole'))}
+            />
+          </FormField>
+
+          <div className="sm:col-span-2 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Contact
+            </p>
+          </div>
+
+          <FormField
+            label="Contact e-mail"
+            htmlFor="contactEmail"
+            error={getError('contactEmail')}
+            warning={getWarning('contactEmail')}
+            confidence={getConfidence('contactEmail')}
+          >
+            <input
+              id="contactEmail"
+              name="contactEmail"
+              value={value.contactEmail ?? ''}
+              onChange={(event) => onChange('contactEmail', event.target.value)}
+              placeholder="info@bedrijf.nl"
+              className={inputClassName(!!getError('contactEmail'))}
+            />
+          </FormField>
+
+          <FormField
+            label="Contact telefoon"
+            htmlFor="contactPhone"
+            error={getError('contactPhone')}
+            warning={getWarning('contactPhone')}
+            confidence={getConfidence('contactPhone')}
+          >
+            <input
+              id="contactPhone"
+              name="contactPhone"
+              value={value.contactPhone ?? ''}
+              onChange={(event) => onChange('contactPhone', event.target.value)}
+              placeholder="020-1234567"
+              className={inputClassName(!!getError('contactPhone'))}
+            />
+          </FormField>
+
+          <FormField
+            label="Website"
+            htmlFor="website"
+            error={getError('website')}
+            warning={getWarning('website')}
+            confidence={getConfidence('website')}
+          >
+            <input
+              id="website"
+              name="website"
+              value={value.website ?? ''}
+              onChange={(event) => onChange('website', event.target.value)}
+              placeholder="www.bedrijf.nl"
+              className={inputClassName(!!getError('website'))}
+            />
+          </FormField>
+
+          <div className="sm:col-span-2 pt-2">
+            <p className="text-xs font-semibold uppercase tracking-wide text-slate-500">
+              Facturatie
+            </p>
+          </div>
+
+          <FormField
+            label="Factuur e-mail"
+            htmlFor="invoiceEmail"
+            error={getError('invoiceEmail')}
+            warning={getWarning('invoiceEmail')}
+            confidence={getConfidence('invoiceEmail')}
+          >
+            <input
+              id="invoiceEmail"
+              name="invoiceEmail"
+              value={value.invoiceEmail ?? ''}
+              onChange={(event) => onChange('invoiceEmail', event.target.value)}
+              placeholder="facturen@bedrijf.nl"
+              className={inputClassName(!!getError('invoiceEmail'))}
+            />
+          </FormField>
+
+          <FormField
+            label="BTW-nummer"
+            htmlFor="vatNumber"
+            error={getError('vatNumber')}
+            warning={getWarning('vatNumber')}
+            confidence={getConfidence('vatNumber')}
+          >
+            <input
+              id="vatNumber"
+              name="vatNumber"
+              value={value.vatNumber ?? ''}
+              onChange={(event) => onChange('vatNumber', event.target.value)}
+              placeholder="NL123456789B01"
+              className={inputClassName(!!getError('vatNumber'))}
             />
           </FormField>
 

@@ -7,9 +7,12 @@ const getSearchUrl = (query: string, limit = 10) => {
   return `/api/kvk/search?${params.toString()}`
 }
 
-const getProfileUrl = (kvkNumber: string) => {
+const getProfileUrl = (kvkNumber: string, vestigingsNumber?: string) => {
   const params = new URLSearchParams()
   params.set('kvkNumber', kvkNumber)
+  if (vestigingsNumber) {
+    params.set('vestigingsNumber', vestigingsNumber)
+  }
   return `/api/kvk/profile?${params.toString()}`
 }
 
@@ -35,12 +38,9 @@ export const getKvkProfile = async (
   signal?: AbortSignal,
   vestigingsNumber?: string,
 ): Promise<KvkProfile> => {
-  const response = await fetch(
-    vestigingsNumber
-      ? `${getProfileUrl(kvkNumber)}&vestigingsNumber=${encodeURIComponent(vestigingsNumber)}`
-      : getProfileUrl(kvkNumber),
-    { signal },
-  )
+  const response = await fetch(getProfileUrl(kvkNumber, vestigingsNumber), {
+    signal,
+  })
   if (response.status === 404) {
     throw new Error('Geen KVK-profiel gevonden.')
   }

@@ -20,6 +20,9 @@ export const TELEMETRY_OPTIONS = [
 export type TelemetryOption = (typeof TELEMETRY_OPTIONS)[number]
 export const TELEMETRY_CODE_UNKNOWN = 'ONBEKEND' as const
 
+export const COMPANY_ACTIVE_OPTIONS = ['active', 'inactive', 'unknown'] as const
+export type CompanyActive = (typeof COMPANY_ACTIVE_OPTIONS)[number]
+
 export const CONNECTION_SOURCES = [
   'OCR_PHOTO',
   'OCR_PDF',
@@ -33,10 +36,19 @@ export interface Connection {
   eanCode: string
   product: ConnectionProduct
   tenaamstelling: string
+  legalName?: string
+  tradeName?: string
+  companyActive?: CompanyActive
   kvkNumber: string
   iban: string
   authorizedSignatory: string
+  authorizedSignatoryRole?: string
   legalForm?: string
+  contactEmail?: string
+  contactPhone?: string
+  website?: string
+  invoiceEmail?: string
+  vatNumber?: string
   telemetryCode: string
   telemetryType?: TelemetryOption | string
   department?: string

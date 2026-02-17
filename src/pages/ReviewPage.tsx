@@ -25,16 +25,13 @@ export const ReviewPage = () => {
     Record<
       string,
       {
-        status: 'loading' | 'ready' | 'error' | 'ignored' | 'applied'
+        status: 'loading' | 'applied' | 'error'
         kvkNumber: string
         profile?: KvkProfile
         error?: string
       }
     >
   >({})
-  const [kvkSignatoryChoice, setKvkSignatoryChoice] = useState<Record<string, string>>(
-    {},
-  )
   const kvkSuggestionsRef = useRef(kvkSuggestions)
 
   useEffect(() => {
@@ -74,7 +71,13 @@ export const ReviewPage = () => {
 
     for (const connection of validConnections) {
       const existing = kvkSuggestionsRef.current[connection.id]
-      if (existing && existing.kvkNumber === connection.kvkNumber) {
+      if (
+        existing &&
+        existing.kvkNumber === connection.kvkNumber &&
+        (existing.status === 'loading' ||
+          existing.status === 'applied' ||
+          existing.status === 'error')
+      ) {
         continue
       }
       const controller = new AbortController()
@@ -90,10 +93,18 @@ export const ReviewPage = () => {
       getKvkProfile(connection.kvkNumber ?? '', controller.signal)
         .then((profile) => {
           if (!active) return
+          const autoSignatory =
+            profile.signatories.length === 1 ? profile.signatories[0] : undefined
+          const patch = buildKvkPatch(profile, autoSignatory as KvkSignatory | undefined)
+          setPendingConnections((prev) =>
+            prev.map((entry) =>
+              entry.id === connection.id ? applyKvkPatch(entry, patch) : entry,
+            ),
+          )
           setKvkSuggestions((prev) => ({
             ...prev,
             [connection.id]: {
-              status: 'ready',
+              status: 'applied',
               kvkNumber: connection.kvkNumber ?? '',
               profile,
             },
@@ -130,7 +141,7 @@ export const ReviewPage = () => {
     [pendingConnections],
   )
 
-  const kvkReadyItems = useMemo(
+  const kvkAppliedItems = useMemo(
     () =>
       pendingConnections
         .map((connection) => ({
@@ -138,7 +149,8 @@ export const ReviewPage = () => {
           suggestion: kvkSuggestions[connection.id],
         }))
         .filter(
-          (item) => item.suggestion?.status === 'ready' && item.suggestion.profile,
+          (item) =>
+            item.suggestion?.status === 'applied' && item.suggestion.profile,
         ),
     [pendingConnections, kvkSuggestions],
   )
@@ -180,41 +192,6 @@ export const ReviewPage = () => {
     if (selectedId === id) {
       setSelectedId(next[0]?.id ?? null)
     }
-  }
-
-  const applyKvkToConnection = (id: string) => {
-    const suggestion = kvkSuggestions[id]
-    if (!suggestion?.profile) return
-    const profile = suggestion.profile
-    const selection = kvkSignatoryChoice[id]
-    const signatory =
-      profile.signatories.find((item) => item.name === selection) ??
-      (profile.signatories.length === 1 ? profile.signatories[0] : undefined)
-    const patch = buildKvkPatch(profile, signatory as KvkSignatory | undefined)
-    setPendingConnections(
-      pendingConnections.map((connection) =>
-        connection.id === id
-          ? applyKvkPatch(connection, patch)
-          : connection,
-      ),
-    )
-    setKvkSuggestions((prev) => ({
-      ...prev,
-      [id]: {
-        ...prev[id],
-        status: 'applied',
-      },
-    }))
-  }
-
-  const ignoreKvkSuggestion = (id: string) => {
-    setKvkSuggestions((prev) => ({
-      ...prev,
-      [id]: {
-        ...(prev[id] ?? { kvkNumber: '' }),
-        status: 'ignored',
-      },
-    }))
   }
 
   const handleSaveAll = async () => {
@@ -288,67 +265,22 @@ export const ReviewPage = () => {
             {incompleteCount === 1 ? '' : 'en'} missen verplichte velden.
           </div>
         )}
-        {kvkReadyItems.length > 0 && (
-          <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+        {kvkAppliedItems.length > 0 && (
+          <div className="mt-4 space-y-2 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
             <p className="font-semibold">
-              KVK gevonden in document. Bedrijfsgegevens staan klaar.
+              KvK gevonden, bedrijfsgegevens zijn aangevuld. Je kunt dit aanpassen.
             </p>
-            <div className="space-y-3">
-              {kvkReadyItems.map(({ connection, suggestion }) => {
-                const profile = suggestion?.profile
-                if (!profile) return null
-                const signatories = profile.signatories ?? []
-                return (
-                  <div
-                    key={`kvk-${connection.id}`}
-                    className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-slate-700"
-                  >
-                    <p className="font-semibold text-slate-800">
-                      {profile.legalName || profile.tradeName || 'Bedrijf'}
-                    </p>
-                    <p className="text-slate-500">
-                      KvK {profile.kvkNumber}
-                    </p>
-                    {signatories.length > 1 && (
-                      <select
-                        value={kvkSignatoryChoice[connection.id] ?? ''}
-                        onChange={(event) =>
-                          setKvkSignatoryChoice((prev) => ({
-                            ...prev,
-                            [connection.id]: event.target.value,
-                          }))
-                        }
-                        className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
-                      >
-                        <option value="">Selecteer tekenbevoegde</option>
-                        {signatories.map((entry) => (
-                          <option key={entry.name} value={entry.name}>
-                            {entry.name}
-                            {entry.role ? ` (${entry.role})` : ''}
-                          </option>
-                        ))}
-                      </select>
-                    )}
-                    <div className="mt-3 flex flex-wrap gap-2">
-                      <button
-                        type="button"
-                        onClick={() => applyKvkToConnection(connection.id)}
-                        className="btn-primary text-xs"
-                      >
-                        Vul gegevens in
-                      </button>
-                      <button
-                        type="button"
-                        onClick={() => ignoreKvkSuggestion(connection.id)}
-                        className="btn-secondary text-xs"
-                      >
-                        Negeer
-                      </button>
-                    </div>
-                  </div>
-                )
-              })}
-            </div>
+            <ul className="space-y-1 text-xs text-emerald-900">
+              {kvkAppliedItems.map(({ connection, suggestion }) => (
+                <li key={`kvk-${connection.id}`}>
+                  {(suggestion?.profile?.legalName ||
+                    suggestion?.profile?.tradeName ||
+                    connection.tenaamstelling ||
+                    'Bedrijf') as string}{' '}
+                  (KvK {suggestion?.kvkNumber})
+                </li>
+              ))}
+            </ul>
           </div>
         )}
         {kvkErrorItems.length > 0 && (

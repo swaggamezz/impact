@@ -1,9 +1,12 @@
 type KvkSearchItem = {
   kvkNumber: string
+  vestigingsNumber?: string
   name: string
   city?: string
   type?: string
-  active?: boolean
+  active?: 'active' | 'inactive' | 'unknown'
+  legalForm?: string
+  matchConfidence?: number
 }
 
 const JSON_HEADERS = {
@@ -105,21 +108,49 @@ export default async function handler(request: Request) {
         vestigingsnummer?: string
         naam?: string
         type?: string
-        actief?: boolean
+        actief?: boolean | string
+        rechtsvorm?: string
+        adressen?: { binnenlandsAdres?: { plaats?: string } }
         adres?: { binnenlandsAdres?: { plaats?: string } }
       }>
     }
 
-  const items: KvkSearchItem[] = (data.resultaten ?? []).slice(0, limit).map(
-    (item) => ({
-      kvkNumber: item.kvkNummer ?? '',
-      vestigingsNumber: item.vestigingsnummer ?? '',
-      name: item.naam ?? '',
-      city: item.adres?.binnenlandsAdres?.plaats ?? '',
-      type: item.type ?? '',
-      active: item.actief ?? true,
-    }),
-  )
+    const rawResults = (data.resultaten ?? []).slice(0, limit)
+    const maxIndex = Math.max(rawResults.length - 1, 1)
+
+    const toActiveStatus = (value?: boolean | string) => {
+      if (typeof value === 'boolean') {
+        return value ? 'active' : 'inactive'
+      }
+      if (typeof value === 'string') {
+        const normalized = value.trim().toLowerCase()
+        if (['ja', 'true', '1', 'actief', 'active'].includes(normalized)) {
+          return 'active'
+        }
+        if (['nee', 'false', '0', 'inactief', 'inactive', 'gesloten'].includes(normalized)) {
+          return 'inactive'
+        }
+      }
+      return 'unknown'
+    }
+
+    const items: KvkSearchItem[] = rawResults.map((item, index) => {
+      const confidence = 1 - (index / maxIndex) * 0.4
+      const city =
+        item.adres?.binnenlandsAdres?.plaats ??
+        item.adressen?.binnenlandsAdres?.plaats ??
+        ''
+      return {
+        kvkNumber: item.kvkNummer ?? '',
+        vestigingsNumber: item.vestigingsnummer ?? '',
+        name: item.naam ?? '',
+        city,
+        type: item.type ?? '',
+        active: toActiveStatus(item.actief),
+        legalForm: item.rechtsvorm ?? '',
+        matchConfidence: Math.round(confidence * 100) / 100,
+      }
+    })
 
     return json(200, { items })
   } catch (error) {

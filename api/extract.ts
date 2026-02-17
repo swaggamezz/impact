@@ -199,6 +199,25 @@ const normalizeBoolean = (value: unknown, fallback: boolean) => {
   return fallback
 }
 
+const normalizeCompanyActive = (value: unknown) => {
+  if (typeof value !== 'string') return ''
+  const normalized = value.trim().toLowerCase()
+  if (['active', 'actief', 'ja', 'yes', 'true', '1'].includes(normalized)) {
+    return 'active'
+  }
+  if (
+    ['inactive', 'inactief', 'nee', 'no', 'false', '0', 'gesloten'].includes(
+      normalized,
+    )
+  ) {
+    return 'inactive'
+  }
+  if (['unknown', 'onbekend', 'nvt', 'n.v.t.'].includes(normalized)) {
+    return 'unknown'
+  }
+  return normalized
+}
+
 const normalizeGridOperator = (value: unknown) => {
   if (typeof value !== 'string') return ''
   const trimmed = value.trim()
@@ -295,14 +314,36 @@ const normalizeConnection = (raw: unknown, defaultSource?: string) => {
   const supplierSafe =
     supplier.toLowerCase() === 'impact energy' ? '' : supplier
 
+  const legalName = toCleanString(input.legalName)
+  const tradeName = toCleanString(input.tradeName)
+  const tenaamstelling =
+    toCleanString(input.tenaamstelling) || legalName || tradeName
+  const companyActive =
+    normalizeCompanyActive(
+      typeof input.companyActive === 'string'
+        ? input.companyActive
+        : typeof input.active === 'string'
+          ? input.active
+          : '',
+    ) || ''
+
   const connection: AnyRecord = {
     eanCode,
     product: normalizeEnum(input.product, PRODUCT_OPTIONS, 'Onbekend'),
-    tenaamstelling: toCleanString(input.tenaamstelling),
+    tenaamstelling,
+    legalName,
+    tradeName,
+    companyActive,
     kvkNumber: toCleanString(input.kvkNumber).replace(/\D/g, ''),
     iban: toCleanString(input.iban).replace(/\s+/g, '').toUpperCase(),
     authorizedSignatory: toCleanString(input.authorizedSignatory),
+    authorizedSignatoryRole: toCleanString(input.authorizedSignatoryRole),
     legalForm: toCleanString(input.legalForm),
+    contactEmail: toCleanString(input.contactEmail),
+    contactPhone: toCleanString(input.contactPhone),
+    website: toCleanString(input.website),
+    invoiceEmail: toCleanString(input.invoiceEmail),
+    vatNumber: toCleanString(input.vatNumber),
     telemetryCode,
     telemetryType: normalizeEnum(
       input.telemetryType,
@@ -558,10 +599,19 @@ Schema:
       "eanCode": "",
       "product": "Onbekend",
       "tenaamstelling": "",
+      "legalName": "",
+      "tradeName": "",
+      "companyActive": "unknown",
       "kvkNumber": "",
       "iban": "",
       "authorizedSignatory": "",
+      "authorizedSignatoryRole": "",
       "legalForm": "",
+      "contactEmail": "",
+      "contactPhone": "",
+      "website": "",
+      "invoiceEmail": "",
+      "vatNumber": "",
       "telemetryCode": "ONBEKEND",
       "telemetryType": "Onbekend",
       "deliveryStreet": "",

@@ -99,6 +99,21 @@ const normalizeIban = (value?: string) => {
   return normalized || undefined
 }
 
+const normalizeCompanyActive = (value?: string) => {
+  if (!value) return undefined
+  const normalized = value.trim().toLowerCase()
+  if (['active', 'actief', 'ja', 'true', '1'].includes(normalized)) {
+    return 'active'
+  }
+  if (['inactive', 'inactief', 'nee', 'false', '0', 'closed', 'gesloten'].includes(normalized)) {
+    return 'inactive'
+  }
+  if (['unknown', 'onbekend', 'nvt', 'n.v.t.'].includes(normalized)) {
+    return 'unknown'
+  }
+  return undefined
+}
+
 const migrateConnection = (raw: ConnectionDraft): ConnectionDraft => {
   const data = raw as Record<string, unknown>
   const next: ConnectionDraft = { ...(raw ?? {}) }
@@ -109,6 +124,81 @@ const migrateConnection = (raw: ConnectionDraft): ConnectionDraft => {
     toStringValue(data.customerName)
   if (legacyTenaamstelling && !next.tenaamstelling) {
     next.tenaamstelling = legacyTenaamstelling
+  }
+
+  const legacyLegalName =
+    toStringValue(data.legalName) ??
+    toStringValue(data.juridischeNaam) ??
+    toStringValue(data.statutaireNaam)
+  if (legacyLegalName && !next.legalName) {
+    next.legalName = legacyLegalName
+  }
+
+  const legacyTradeName =
+    toStringValue(data.tradeName) ??
+    toStringValue(data.handelsnaam) ??
+    toStringValue(data.trade_name)
+  if (legacyTradeName && !next.tradeName) {
+    next.tradeName = legacyTradeName
+  }
+
+  if (!next.legalName && next.tenaamstelling) {
+    next.legalName = next.tenaamstelling
+  }
+
+  const legacyCompanyActive =
+    normalizeCompanyActive(toStringValue(data.companyActive)) ??
+    normalizeCompanyActive(toStringValue(data.active))
+  if (legacyCompanyActive && !next.companyActive) {
+    next.companyActive = legacyCompanyActive
+  }
+
+  const legacyAuthorizedRole =
+    toStringValue(data.authorizedSignatoryRole) ??
+    toStringValue(data.tekenbevoegdeRol) ??
+    toStringValue(data.signatoryRole)
+  if (legacyAuthorizedRole && !next.authorizedSignatoryRole) {
+    next.authorizedSignatoryRole = legacyAuthorizedRole
+  }
+
+  const legacyContactEmail =
+    toStringValue(data.contactEmail) ??
+    toStringValue(data.email) ??
+    toStringValue(data.contact_email)
+  if (legacyContactEmail && !next.contactEmail) {
+    next.contactEmail = legacyContactEmail
+  }
+
+  const legacyContactPhone =
+    toStringValue(data.contactPhone) ??
+    toStringValue(data.telefoon) ??
+    toStringValue(data.phone)
+  if (legacyContactPhone && !next.contactPhone) {
+    next.contactPhone = legacyContactPhone
+  }
+
+  const legacyWebsite =
+    toStringValue(data.website) ??
+    toStringValue(data.web) ??
+    toStringValue(data.url)
+  if (legacyWebsite && !next.website) {
+    next.website = legacyWebsite
+  }
+
+  const legacyInvoiceEmail =
+    toStringValue(data.invoiceEmail) ??
+    toStringValue(data.factuurEmail) ??
+    toStringValue(data.billingEmail)
+  if (legacyInvoiceEmail && !next.invoiceEmail) {
+    next.invoiceEmail = legacyInvoiceEmail
+  }
+
+  const legacyVatNumber =
+    toStringValue(data.vatNumber) ??
+    toStringValue(data.btwNummer) ??
+    toStringValue(data.vat)
+  if (legacyVatNumber && !next.vatNumber) {
+    next.vatNumber = legacyVatNumber
   }
 
   const legacyStreet =

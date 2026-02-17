@@ -1,17 +1,30 @@
 import { jsPDF } from 'jspdf'
 import * as XLSX from 'xlsx'
 import type { ConnectionDraft } from '../models/connection'
+import { validateConnection } from '../utils/validation'
 
 const EXPORT_COLUMNS: Array<{ key: string; label: string }> = [
-  { key: 'eanCode', label: 'EAN code' },
-  { key: 'product', label: 'Product' },
   { key: 'tenaamstelling', label: 'Tenaamstelling' },
+  { key: 'legalName', label: 'Juridische naam' },
+  { key: 'tradeName', label: 'Handelsnaam' },
   { key: 'kvkNumber', label: 'KvK' },
   { key: 'legalForm', label: 'Rechtsvorm' },
-  { key: 'iban', label: 'IBAN' },
+  { key: 'companyActive', label: 'Status bedrijf' },
   { key: 'authorizedSignatory', label: 'Tekenbevoegde' },
+  { key: 'authorizedSignatoryRole', label: 'Rol tekenbevoegde' },
+  { key: 'iban', label: 'IBAN' },
+  { key: 'invoiceEmail', label: 'Factuur e-mail' },
+  { key: 'vatNumber', label: 'BTW-nummer' },
+  { key: 'contactEmail', label: 'Contact e-mail' },
+  { key: 'contactPhone', label: 'Contact telefoon' },
+  { key: 'website', label: 'Website' },
+  { key: 'eanCode', label: 'EAN code' },
+  { key: 'product', label: 'Product' },
+  { key: 'gridOperator', label: 'Netbeheerder' },
   { key: 'telemetryCode', label: 'Telemetriecode' },
   { key: 'telemetryType', label: 'Telemetrie type' },
+  { key: 'marketSegment', label: 'Segment' },
+  { key: 'meterNumber', label: 'Meternummer' },
   { key: 'deliveryPostcode', label: 'Postcode levering' },
   { key: 'deliveryHouseNumber', label: 'Huisnummer levering' },
   { key: 'deliveryHouseNumberAddition', label: 'Toevoeging levering' },
@@ -23,14 +36,12 @@ const EXPORT_COLUMNS: Array<{ key: string; label: string }> = [
   { key: 'invoiceHouseNumberAddition', label: 'Toevoeging factuur' },
   { key: 'invoiceStreet', label: 'Straat factuur' },
   { key: 'invoiceCity', label: 'Plaats factuur' },
-  { key: 'gridOperator', label: 'Netbeheerder' },
   { key: 'supplier', label: 'Leverancier' },
-  { key: 'marketSegment', label: 'Segment' },
   { key: 'department', label: 'Afdeling' },
-  { key: 'meterNumber', label: 'Meternummer' },
   { key: 'annualUsageNormal', label: 'Jaarverbruik hoog' },
   { key: 'annualUsageLow', label: 'Jaarverbruik laag' },
   { key: 'status', label: 'Status' },
+  { key: 'addressWarning', label: 'Adreswaarschuwing' },
   { key: 'notes', label: 'Notities' },
   { key: 'createdAt', label: 'Aangemaakt' },
   { key: 'source', label: 'Bron' },
@@ -39,6 +50,12 @@ const EXPORT_COLUMNS: Array<{ key: string; label: string }> = [
 const normalizeValue = (value: unknown) => {
   if (value === null || value === undefined) return ''
   return String(value)
+}
+
+const COMPANY_ACTIVE_LABELS: Record<string, string> = {
+  active: 'Actief',
+  inactive: 'Niet actief',
+  unknown: 'Onbekend',
 }
 
 const isInvoiceSameAsDelivery = (connection: ConnectionDraft) =>
@@ -72,6 +89,11 @@ const getExportValue = (connection: ConnectionDraft, key: string) => {
   const invoiceSame = isInvoiceSameAsDelivery(connection)
 
   switch (key) {
+    case 'companyActive': {
+      const raw = connection.companyActive
+      if (!raw) return ''
+      return COMPANY_ACTIVE_LABELS[raw] ?? raw
+    }
     case 'invoiceSameAsDelivery':
       return invoiceSame ? 'Ja' : 'Nee'
     case 'invoiceStreet':
@@ -165,10 +187,15 @@ const buildPdfDocument = (connections: ConnectionDraft[]) => {
   const pageWidth = doc.internal.pageSize.getWidth()
   const pageHeight = doc.internal.pageSize.getHeight()
   const margin = 32
-  const headerHeight = 58
+  const headerHeight = 78
   const labelWidth = 180
   const valueWidth = pageWidth - margin * 2 - labelWidth - 12
   const lineHeight = 14
+
+  const exportTimestamp = new Date().toLocaleString('nl-NL')
+  const incompleteCount = connections.filter(
+    (connection) => Object.keys(validateConnection(connection)).length > 0,
+  ).length
 
   const drawDocumentHeader = () => {
     doc.setFillColor(15, 23, 42)
@@ -182,9 +209,14 @@ const buildPdfDocument = (connections: ConnectionDraft[]) => {
     doc.setTextColor(15, 23, 42)
     doc.setFontSize(9)
     doc.text(
-      `Aangemaakt: ${new Date().toLocaleString('nl-NL')}  |  Totaal: ${connections.length}`,
+      `Aangemaakt: ${exportTimestamp}`,
       margin,
       58,
+    )
+    doc.text(
+      `Totaal: ${connections.length}  |  Incompleet: ${incompleteCount}`,
+      margin,
+      70,
     )
   }
 
@@ -233,20 +265,32 @@ const buildPdfDocument = (connections: ConnectionDraft[]) => {
     const fields: Array<[string, string]> = [
       ['Aansluiting', `#${index + 1}`],
       ['Tenaamstelling', normalizeValue(connection.tenaamstelling)],
+      ['Juridische naam', normalizeValue(connection.legalName)],
+      ['Handelsnaam', normalizeValue(connection.tradeName)],
+      ['Rechtsvorm', normalizeValue(connection.legalForm)],
+      [
+        'Status bedrijf',
+        normalizeValue(getExportValue(connection, 'companyActive')),
+      ],
+      ['KvK', normalizeValue(connection.kvkNumber)],
+      ['Tekenbevoegde', normalizeValue(connection.authorizedSignatory)],
+      ['Rol tekenbevoegde', normalizeValue(connection.authorizedSignatoryRole)],
+      ['IBAN', normalizeValue(connection.iban)],
+      ['Factuur e-mail', normalizeValue(connection.invoiceEmail)],
+      ['BTW-nummer', normalizeValue(connection.vatNumber)],
+      ['Contact e-mail', normalizeValue(connection.contactEmail)],
+      ['Contact telefoon', normalizeValue(connection.contactPhone)],
+      ['Website', normalizeValue(connection.website)],
       ['EAN', normalizeValue(connection.eanCode)],
       ['Product', normalizeValue(connection.product)],
       ['Marktsegment', normalizeValue(connection.marketSegment)],
-      ['KvK', normalizeValue(connection.kvkNumber)],
-      ['Rechtsvorm', normalizeValue(connection.legalForm)],
-      ['Tekenbevoegde', normalizeValue(connection.authorizedSignatory)],
-      ['IBAN', normalizeValue(connection.iban)],
       ['Telemetriecode / Meetcode', normalizeValue(connection.telemetryCode)],
       ['Telemetrie type', normalizeValue(connection.telemetryType)],
-      ['Leveringsadres', deliveryAddress],
-      ['Factuuradres', invoiceAddress],
       ['Netbeheerder', normalizeValue(connection.gridOperator)],
       ['Leverancier', normalizeValue(connection.supplier)],
       ['Meternummer', normalizeValue(connection.meterNumber)],
+      ['Leveringsadres', deliveryAddress],
+      ['Factuuradres', invoiceAddress],
       ['Afdeling', normalizeValue(connection.department)],
       ['Jaarverbruik hoog', normalizeValue(connection.annualUsageNormal)],
       ['Jaarverbruik laag', normalizeValue(connection.annualUsageLow)],

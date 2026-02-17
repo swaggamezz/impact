@@ -1,6 +1,11 @@
 import { useEffect, useMemo, useRef, useState } from 'react'
 import { getKvkProfile, searchKvk } from '../services/kvkService'
-import type { KvkProfile, KvkSearchItem, KvkSignatory } from '../types/kvk'
+import type {
+  KvkProfile,
+  KvkSearchItem,
+  KvkSignatory,
+  KvkAddress,
+} from '../types/kvk'
 
 type Step = 'search' | 'preview'
 
@@ -8,21 +13,33 @@ type Props = {
   onApply: (profile: KvkProfile, signatory?: KvkSignatory) => void
 }
 
-const formatAddress = (profile?: KvkProfile) => {
-  if (!profile) return '-'
-  const parts = [
-    profile.address.street,
-    profile.address.houseNumber,
-    profile.address.houseNumberAddition,
-  ].filter(Boolean)
+const formatAddress = (address?: KvkAddress) => {
+  if (!address) return '-'
+  const parts = [address.street, address.houseNumber, address.addition].filter(
+    Boolean,
+  )
   const line1 = parts.join(' ')
-  const line2 = [profile.address.postcode, profile.address.city]
-    .filter(Boolean)
-    .join(' ')
+  const line2 = [address.postcode, address.city].filter(Boolean).join(' ')
   if (!line1 && !line2) return '-'
   if (!line2) return line1
   if (!line1) return line2
   return `${line1}, ${line2}`
+}
+
+const getStatusLabel = (status?: KvkProfile['companyActive']) => {
+  if (status === 'inactive') return 'Niet actief'
+  if (status === 'active') return 'Actief'
+  return 'Onbekend'
+}
+
+const getStatusTone = (status?: KvkProfile['companyActive']) => {
+  if (status === 'inactive') {
+    return 'border-red-200 bg-red-50 text-red-700'
+  }
+  if (status === 'active') {
+    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
+  }
+  return 'border-slate-200 bg-slate-50 text-slate-600'
 }
 
 export const KvkLookupWizard = ({ onApply }: Props) => {
@@ -158,9 +175,7 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                 placeholder="Zoek op bedrijfsnaam of KVK-nummer..."
                 className="w-full rounded-xl border border-slate-200 bg-white px-3 py-2 text-sm text-slate-900 shadow-sm focus:outline-none focus:ring-2 focus:ring-slate-200"
               />
-              {loading && (
-                <p className="text-xs text-slate-500">Zoeken...</p>
-              )}
+              {loading && <p className="text-xs text-slate-500">Zoeken...</p>}
               {!loading && error && (
                 <p className="text-xs text-red-600">{error}</p>
               )}
@@ -170,7 +185,9 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
               {results.length > 0 && (
                 <ul className="space-y-2">
                   {results.map((item) => (
-                    <li key={`${item.kvkNumber}-${item.name}`}>
+                    <li
+                      key={`${item.kvkNumber}-${item.vestigingsNumber ?? item.name}`}
+                    >
                       <button
                         type="button"
                         onClick={() => handleSelect(item)}
@@ -181,11 +198,37 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                         </span>
                         <span className="text-slate-500">
                           KvK {item.kvkNumber || '-'}
-                          {item.city ? ` · ${item.city}` : ''}
+                          {item.city ? ` - ${item.city}` : ''}
                         </span>
-                        {item.type && (
-                          <span className="text-slate-400">{item.type}</span>
-                        )}
+                        <div className="mt-1 flex flex-wrap gap-2">
+                          {item.type && (
+                            <span className="text-[11px] text-slate-400">
+                              {item.type}
+                            </span>
+                          )}
+                          {item.legalForm && (
+                            <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">
+                              {item.legalForm}
+                            </span>
+                          )}
+                          {item.active && (
+                            <span
+                              className={`rounded-full border px-2 py-0.5 text-[10px] ${
+                                item.active === 'inactive'
+                                  ? 'border-red-200 bg-red-50 text-red-600'
+                                  : item.active === 'active'
+                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
+                                    : 'border-slate-200 bg-slate-50 text-slate-600'
+                              }`}
+                            >
+                              {item.active === 'inactive'
+                                ? 'Niet actief'
+                                : item.active === 'active'
+                                  ? 'Actief'
+                                  : 'Onbekend'}
+                            </span>
+                          )}
+                        </div>
                       </button>
                     </li>
                   ))}
@@ -208,9 +251,16 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                     <p className="font-semibold text-slate-800">
                       {selectedProfile.legalName || 'Bedrijfsnaam'}
                     </p>
-                    <p className="text-slate-500">
-                      KvK {selectedProfile.kvkNumber}
-                    </p>
+                    <div className="flex flex-wrap items-center gap-2 text-slate-500">
+                      <span>KvK {selectedProfile.kvkNumber}</span>
+                      <span
+                        className={`rounded-full border px-2 py-0.5 text-[10px] ${getStatusTone(
+                          selectedProfile.companyActive,
+                        )}`}
+                      >
+                        {getStatusLabel(selectedProfile.companyActive)}
+                      </span>
+                    </div>
                   </div>
                   <div className="space-y-1">
                     <p className="text-slate-500">Rechtsvorm</p>
@@ -219,11 +269,26 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-slate-500">Adres (hoofdvestiging)</p>
+                    <p className="text-slate-500">Bezoekadres</p>
                     <p className="text-slate-800">
-                      {formatAddress(selectedProfile)}
+                      {formatAddress(selectedProfile.mainVisitingAddress)}
                     </p>
                   </div>
+                  <div className="space-y-1">
+                    <p className="text-slate-500">Post-/factuuradres</p>
+                    <p className="text-slate-800">
+                      {formatAddress(selectedProfile.postalAddress)}
+                    </p>
+                  </div>
+                  {selectedProfile.tradeNames &&
+                    selectedProfile.tradeNames.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-slate-500">Handelsnamen</p>
+                        <p className="text-slate-800">
+                          {selectedProfile.tradeNames.join(', ')}
+                        </p>
+                      </div>
+                    )}
                   {signatories.length > 0 && (
                     <div className="space-y-1">
                       <p className="text-slate-500">Tekenbevoegde(n)</p>
@@ -251,6 +316,17 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                       )}
                     </div>
                   )}
+                  {selectedProfile.warnings &&
+                    selectedProfile.warnings.length > 0 && (
+                      <div className="space-y-1">
+                        <p className="text-slate-500">Let op</p>
+                        <ul className="space-y-1 text-[11px] text-amber-700">
+                          {selectedProfile.warnings.map((warning, index) => (
+                            <li key={`${warning}-${index}`}>{warning}</li>
+                          ))}
+                        </ul>
+                      </div>
+                    )}
                   {hintVisible && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
                       {successHint}
