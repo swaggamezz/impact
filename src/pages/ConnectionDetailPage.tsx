@@ -10,6 +10,7 @@ const FIELD_LABELS: Partial<Record<keyof ConnectionDraft, string>> = {
   product: 'Product',
   tenaamstelling: 'Tenaamstelling',
   kvkNumber: 'KvK-nummer',
+  legalForm: 'Rechtsvorm',
   iban: 'IBAN',
   authorizedSignatory: 'Tekenbevoegde volgens KvK',
   telemetryCode: 'Telemetriecode / Meetcode',

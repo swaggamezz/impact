@@ -168,6 +168,7 @@ Belangrijke velden:
 - `kvkNumber`
 - `iban`
 - `authorizedSignatory`
+- `legalForm` (rechtsvorm)
 - `telemetryCode`
 - `telemetryType` (optioneel)
 - leveringsadres:
@@ -257,6 +258,35 @@ PDF-flow:
 - alle pagina's OCR
 - tekst samenvoegen
 - 1 extractie-resultaat per PDF
+
+---
+
+## 9. KVK lookup (Afsluiter)
+
+De app kan KvK-gegevens ophalen om Afsluiter-velden automatisch aan te vullen.
+
+Wat wordt ingevuld:
+- KvK-nummer
+- Tenaamstelling
+- Rechtsvorm (optioneel)
+- Tekenbevoegde (indien beschikbaar)
+- Factuuradres (KVK-adres)
+
+**Let op:** het leveringsadres (aansluitadres) blijft altijd onaangetast.
+
+### Benodigde environment variables (serverless)
+
+Deze waarden zet je in Vercel/Netlify (serverless), nooit in de frontend:
+
+- `KVK_ENV` = `test` (default) of `prod`
+- `KVK_API_KEY` = jouw productie key (test gebruikt automatisch de publieke test key)
+- `KVK_BASE_URL` (optioneel, override)
+
+Voorbeeld:
+```
+KVK_ENV=test
+KVK_API_KEY=kvk_live_key_here
+```
 
 In code wordt dat afgedwongen met:
 - `allowMultiple: false`

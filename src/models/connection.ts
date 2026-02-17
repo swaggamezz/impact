@@ -36,6 +36,7 @@ export interface Connection {
   kvkNumber: string
   iban: string
   authorizedSignatory: string
+  legalForm?: string
   telemetryCode: string
   telemetryType?: TelemetryOption | string
   department?: string

@@ -53,6 +53,7 @@ const LABEL_ALIASES: Record<ConnectionField, string[]> = {
     'tekenbevoegde volgens kvk',
     'vertegenwoordiger',
   ],
+  legalForm: ['rechtsvorm', 'juridische vorm', 'legal form'],
   department: ['afdeling', 'department', 'dept'],
   deliveryStreet: ['straat', 'straatnaam', 'straat naam', 'adres straat'],
   deliveryHouseNumber: ['huisnummer', 'huis nummer', 'hnr', 'nr', 'huisnr', 'huis nr'],

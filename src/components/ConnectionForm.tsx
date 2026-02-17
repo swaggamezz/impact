@@ -18,7 +18,10 @@ import {
   validateConnectionWarnings,
   type ConnectionValidationErrors,
 } from '../utils/validation'
+import { KvkLookupWizard } from './KvkLookupWizard'
 import { FormField } from './FormField'
+import { buildKvkPatch } from '../services/kvkMapping'
+import type { KvkProfile, KvkSignatory } from '../types/kvk'
 
 interface ConnectionFormProps {
   value: ConnectionDraft
@@ -222,6 +225,21 @@ export const ConnectionForm = ({
 
   const invoiceSameAsDelivery = value.invoiceSameAsDelivery !== false
 
+  const applyKvkProfile = (
+    profile: KvkProfile,
+    signatory?: KvkSignatory,
+  ) => {
+    const patch = buildKvkPatch(profile, signatory)
+    const fields = Object.entries(patch) as Array<
+      [keyof ConnectionDraft, string | boolean | undefined]
+    >
+    for (const [field, fieldValue] of fields) {
+      if (fieldValue !== undefined && fieldValue !== value[field]) {
+        onChange(field, fieldValue)
+      }
+    }
+  }
+
   return (
     <div className="space-y-6">
       <section className="rounded-2xl border border-slate-200 bg-white p-6 shadow-sm">
@@ -293,6 +311,10 @@ export const ConnectionForm = ({
             />
           </FormField>
 
+          <div className="sm:col-span-2">
+            <KvkLookupWizard onApply={applyKvkProfile} />
+          </div>
+
           <FormField
             label="KvK-nummer"
             htmlFor="kvkNumber"
@@ -310,6 +332,23 @@ export const ConnectionForm = ({
               placeholder="12345678"
               inputMode="numeric"
               className={inputClassName(!!getError('kvkNumber'))}
+            />
+          </FormField>
+
+          <FormField
+            label="Rechtsvorm"
+            htmlFor="legalForm"
+            error={getError('legalForm')}
+            warning={getWarning('legalForm')}
+            confidence={getConfidence('legalForm')}
+          >
+            <input
+              id="legalForm"
+              name="legalForm"
+              value={value.legalForm ?? ''}
+              onChange={(event) => onChange('legalForm', event.target.value)}
+              placeholder="Bijv. BV, VOF, Stichting"
+              className={inputClassName(!!getError('legalForm'))}
             />
           </FormField>
 

@@ -1,10 +1,13 @@
-import { useEffect, useMemo, useState } from 'react'
+import { useEffect, useMemo, useRef, useState } from 'react'
 import { Link, useNavigate } from 'react-router-dom'
 import { ConnectionForm } from '../components/ConnectionForm'
 import { useReview } from '../contexts/reviewContext'
+import { buildKvkPatch, applyKvkPatch } from '../services/kvkMapping'
+import { getKvkProfile } from '../services/kvkService'
 import { getAllConnections, setConnections } from '../services/storageService'
-import { validateConnection } from '../utils/validation'
+import { isValidKvk, validateConnection } from '../utils/validation'
 import type { ConnectionDraft } from '../models/connection'
+import type { KvkProfile, KvkSignatory } from '../types/kvk'
 
 export const ReviewPage = () => {
   const {
@@ -18,12 +21,102 @@ export const ReviewPage = () => {
     pendingConnections[0]?.id ?? null,
   )
   const [saving, setSaving] = useState(false)
+  const [kvkSuggestions, setKvkSuggestions] = useState<
+    Record<
+      string,
+      {
+        status: 'loading' | 'ready' | 'error' | 'ignored' | 'applied'
+        kvkNumber: string
+        profile?: KvkProfile
+        error?: string
+      }
+    >
+  >({})
+  const [kvkSignatoryChoice, setKvkSignatoryChoice] = useState<Record<string, string>>(
+    {},
+  )
+  const kvkSuggestionsRef = useRef(kvkSuggestions)
+
+  useEffect(() => {
+    kvkSuggestionsRef.current = kvkSuggestions
+  }, [kvkSuggestions])
 
   useEffect(() => {
     if (!selectedId && pendingConnections.length > 0) {
       setSelectedId(pendingConnections[0].id)
     }
   }, [pendingConnections, selectedId])
+
+  useEffect(() => {
+    let active = true
+    const controllers: AbortController[] = []
+
+    const validConnections = pendingConnections.filter((connection) =>
+      isValidKvk(connection.kvkNumber),
+    )
+
+    setKvkSuggestions((prev) => {
+      const next: typeof prev = {}
+      let changed = false
+      for (const connection of validConnections) {
+        const existing = prev[connection.id]
+        if (existing && existing.kvkNumber === connection.kvkNumber) {
+          next[connection.id] = existing
+        } else {
+          changed = true
+        }
+      }
+      if (Object.keys(prev).length !== Object.keys(next).length) {
+        changed = true
+      }
+      return changed ? next : prev
+    })
+
+    for (const connection of validConnections) {
+      const existing = kvkSuggestionsRef.current[connection.id]
+      if (existing && existing.kvkNumber === connection.kvkNumber) {
+        continue
+      }
+      const controller = new AbortController()
+      controllers.push(controller)
+      setKvkSuggestions((prev) => ({
+        ...prev,
+        [connection.id]: {
+          status: 'loading',
+          kvkNumber: connection.kvkNumber ?? '',
+        },
+      }))
+
+      getKvkProfile(connection.kvkNumber ?? '', controller.signal)
+        .then((profile) => {
+          if (!active) return
+          setKvkSuggestions((prev) => ({
+            ...prev,
+            [connection.id]: {
+              status: 'ready',
+              kvkNumber: connection.kvkNumber ?? '',
+              profile,
+            },
+          }))
+        })
+        .catch(() => {
+          if (!active) return
+          setKvkSuggestions((prev) => ({
+            ...prev,
+            [connection.id]: {
+              status: 'error',
+              kvkNumber: connection.kvkNumber ?? '',
+              error: 'KVK lookup mislukt.',
+            },
+          }))
+        })
+    }
+
+    return () => {
+      active = false
+      controllers.forEach((controller) => controller.abort())
+    }
+  }, [pendingConnections])
 
   const selectedConnection = pendingConnections.find(
     (connection) => connection.id === selectedId,
@@ -35,6 +128,30 @@ export const ReviewPage = () => {
         (connection) => Object.keys(validateConnection(connection)).length > 0,
       ).length,
     [pendingConnections],
+  )
+
+  const kvkReadyItems = useMemo(
+    () =>
+      pendingConnections
+        .map((connection) => ({
+          connection,
+          suggestion: kvkSuggestions[connection.id],
+        }))
+        .filter(
+          (item) => item.suggestion?.status === 'ready' && item.suggestion.profile,
+        ),
+    [pendingConnections, kvkSuggestions],
+  )
+
+  const kvkErrorItems = useMemo(
+    () =>
+      pendingConnections
+        .map((connection) => ({
+          connection,
+          suggestion: kvkSuggestions[connection.id],
+        }))
+        .filter((item) => item.suggestion?.status === 'error'),
+    [pendingConnections, kvkSuggestions],
   )
 
   const handleChange = (
@@ -63,6 +180,41 @@ export const ReviewPage = () => {
     if (selectedId === id) {
       setSelectedId(next[0]?.id ?? null)
     }
+  }
+
+  const applyKvkToConnection = (id: string) => {
+    const suggestion = kvkSuggestions[id]
+    if (!suggestion?.profile) return
+    const profile = suggestion.profile
+    const selection = kvkSignatoryChoice[id]
+    const signatory =
+      profile.signatories.find((item) => item.name === selection) ??
+      (profile.signatories.length === 1 ? profile.signatories[0] : undefined)
+    const patch = buildKvkPatch(profile, signatory as KvkSignatory | undefined)
+    setPendingConnections(
+      pendingConnections.map((connection) =>
+        connection.id === id
+          ? applyKvkPatch(connection, patch)
+          : connection,
+      ),
+    )
+    setKvkSuggestions((prev) => ({
+      ...prev,
+      [id]: {
+        ...prev[id],
+        status: 'applied',
+      },
+    }))
+  }
+
+  const ignoreKvkSuggestion = (id: string) => {
+    setKvkSuggestions((prev) => ({
+      ...prev,
+      [id]: {
+        ...(prev[id] ?? { kvkNumber: '' }),
+        status: 'ignored',
+      },
+    }))
   }
 
   const handleSaveAll = async () => {
@@ -134,6 +286,78 @@ export const ReviewPage = () => {
           <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
             {incompleteCount} aansluiting
             {incompleteCount === 1 ? '' : 'en'} missen verplichte velden.
+          </div>
+        )}
+        {kvkReadyItems.length > 0 && (
+          <div className="mt-4 space-y-3 rounded-xl border border-emerald-200 bg-emerald-50 px-4 py-3 text-sm text-emerald-800">
+            <p className="font-semibold">
+              KVK gevonden in document. Bedrijfsgegevens staan klaar.
+            </p>
+            <div className="space-y-3">
+              {kvkReadyItems.map(({ connection, suggestion }) => {
+                const profile = suggestion?.profile
+                if (!profile) return null
+                const signatories = profile.signatories ?? []
+                return (
+                  <div
+                    key={`kvk-${connection.id}`}
+                    className="rounded-lg border border-emerald-200 bg-white px-3 py-2 text-xs text-slate-700"
+                  >
+                    <p className="font-semibold text-slate-800">
+                      {profile.legalName || profile.tradeName || 'Bedrijf'}
+                    </p>
+                    <p className="text-slate-500">
+                      KvK {profile.kvkNumber}
+                    </p>
+                    {signatories.length > 1 && (
+                      <select
+                        value={kvkSignatoryChoice[connection.id] ?? ''}
+                        onChange={(event) =>
+                          setKvkSignatoryChoice((prev) => ({
+                            ...prev,
+                            [connection.id]: event.target.value,
+                          }))
+                        }
+                        className="mt-2 w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
+                      >
+                        <option value="">Selecteer tekenbevoegde</option>
+                        {signatories.map((entry) => (
+                          <option key={entry.name} value={entry.name}>
+                            {entry.name}
+                            {entry.role ? ` (${entry.role})` : ''}
+                          </option>
+                        ))}
+                      </select>
+                    )}
+                    <div className="mt-3 flex flex-wrap gap-2">
+                      <button
+                        type="button"
+                        onClick={() => applyKvkToConnection(connection.id)}
+                        className="btn-primary text-xs"
+                      >
+                        Vul gegevens in
+                      </button>
+                      <button
+                        type="button"
+                        onClick={() => ignoreKvkSuggestion(connection.id)}
+                        className="btn-secondary text-xs"
+                      >
+                        Negeer
+                      </button>
+                    </div>
+                  </div>
+                )
+              })}
+            </div>
+          </div>
+        )}
+        {kvkErrorItems.length > 0 && (
+          <div className="mt-4 rounded-xl border border-amber-200 bg-amber-50 px-4 py-3 text-sm text-amber-800">
+            KVK lookup mislukt voor{' '}
+            {kvkErrorItems.length === 1
+              ? '1 aansluiting.'
+              : `${kvkErrorItems.length} aansluitingen.`}{' '}
+            Vul dit handmatig in.
           </div>
         )}
         {report?.warnings?.length ? (

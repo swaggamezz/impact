@@ -302,6 +302,7 @@ const normalizeConnection = (raw: unknown, defaultSource?: string) => {
     kvkNumber: toCleanString(input.kvkNumber).replace(/\D/g, ''),
     iban: toCleanString(input.iban).replace(/\s+/g, '').toUpperCase(),
     authorizedSignatory: toCleanString(input.authorizedSignatory),
+    legalForm: toCleanString(input.legalForm),
     telemetryCode,
     telemetryType: normalizeEnum(
       input.telemetryType,
@@ -524,9 +525,17 @@ IBAN:
 - Vul alleen klant-IBAN in
 - Leverancier-IBAN niet gebruiken
 
+RECHTSVORM:
+- Als rechtsvorm vermeld staat (bijv. BV, VOF, Stichting) → vul legalForm in
+
 LEVERANCIER:
 - Gebruik de daadwerkelijke energieleverancier
 - NOOIT standaard "Impact Energy"
+
+NETBEHEERDER (keuzelijst):
+- Gebruik exact een van: Liander, Enexis, Stedin, TenneT, Coteq, Rendo, Westland Infra, Endinet, Overig
+- Als je een variant ziet (bijv. "Enexis Netbeheer"): normaliseer naar de exacte lijstwaarde
+- Als het duidelijk geen standaard is: zet "Overig" en zet de exacte tekst in notes
 
 MULTIPLE EAN REGEL:
 - Elke unieke EAN = aparte connection
@@ -552,6 +561,7 @@ Schema:
       "kvkNumber": "",
       "iban": "",
       "authorizedSignatory": "",
+      "legalForm": "",
       "telemetryCode": "ONBEKEND",
       "telemetryType": "Onbekend",
       "deliveryStreet": "",
