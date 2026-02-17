@@ -33,8 +33,14 @@ export const searchKvk = async (
 export const getKvkProfile = async (
   kvkNumber: string,
   signal?: AbortSignal,
+  vestigingsNumber?: string,
 ): Promise<KvkProfile> => {
-  const response = await fetch(getProfileUrl(kvkNumber), { signal })
+  const response = await fetch(
+    vestigingsNumber
+      ? `${getProfileUrl(kvkNumber)}&vestigingsNumber=${encodeURIComponent(vestigingsNumber)}`
+      : getProfileUrl(kvkNumber),
+    { signal },
+  )
   if (response.status === 404) {
     throw new Error('Geen KVK-profiel gevonden.')
   }

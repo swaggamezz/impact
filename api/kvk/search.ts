@@ -102,6 +102,7 @@ export default async function handler(request: Request) {
     const data = (await response.json()) as {
       resultaten?: Array<{
         kvkNummer?: string
+        vestigingsnummer?: string
         naam?: string
         type?: string
         actief?: boolean
@@ -109,15 +110,16 @@ export default async function handler(request: Request) {
       }>
     }
 
-    const items: KvkSearchItem[] = (data.resultaten ?? []).slice(0, limit).map(
-      (item) => ({
-        kvkNumber: item.kvkNummer ?? '',
-        name: item.naam ?? '',
-        city: item.adres?.binnenlandsAdres?.plaats ?? '',
-        type: item.type ?? '',
-        active: item.actief ?? true,
-      }),
-    )
+  const items: KvkSearchItem[] = (data.resultaten ?? []).slice(0, limit).map(
+    (item) => ({
+      kvkNumber: item.kvkNummer ?? '',
+      vestigingsNumber: item.vestigingsnummer ?? '',
+      name: item.naam ?? '',
+      city: item.adres?.binnenlandsAdres?.plaats ?? '',
+      type: item.type ?? '',
+      active: item.actief ?? true,
+    }),
+  )
 
     return json(200, { items })
   } catch (error) {

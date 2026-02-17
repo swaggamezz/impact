@@ -1,5 +1,6 @@
 export type KvkSearchItem = {
   kvkNumber: string
+  vestigingsNumber?: string
   name: string
   city?: string
   type?: string

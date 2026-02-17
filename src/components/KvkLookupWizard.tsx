@@ -92,7 +92,11 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
     setSelectedSignatory('')
     setSuccessHint(null)
     try {
-      const profile = await getKvkProfile(item.kvkNumber)
+      const profile = await getKvkProfile(
+        item.kvkNumber,
+        undefined,
+        item.vestigingsNumber,
+      )
       setSelectedProfile(profile)
       if (profile.signatories.length === 1) {
         setSelectedSignatory(profile.signatories[0].name)

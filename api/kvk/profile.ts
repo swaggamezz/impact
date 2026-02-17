@@ -45,6 +45,7 @@ const pickAddress = (
     straatnaam?: string
     huisnummer?: number | string
     huisnummerToevoeging?: string
+    toevoegingAdres?: string
     huisletter?: string
     postcode?: string
     plaats?: string
@@ -73,6 +74,7 @@ export default async function handler(request: Request) {
 
     const url = new URL(request.url, 'http://localhost')
     const kvkNumber = url.searchParams.get('kvkNumber')?.trim() ?? ''
+    const vestigingsNumber = url.searchParams.get('vestigingsNumber')?.trim() ?? ''
     if (!/^\d{8}$/.test(kvkNumber)) {
       return json(400, { error: 'KvK-nummer is ongeldig.' })
     }
@@ -126,6 +128,7 @@ export default async function handler(request: Request) {
             straatnaam?: string
             huisnummer?: number
             huisnummerToevoeging?: string
+            toevoegingAdres?: string
             huisletter?: string
             postcode?: string
             plaats?: string
@@ -138,7 +141,43 @@ export default async function handler(request: Request) {
       }
     }
 
-    const addresses = data._embedded?.hoofdvestiging?.adressen ?? []
+    let addresses = data._embedded?.hoofdvestiging?.adressen ?? []
+
+    if (/^\d{12}$/.test(vestigingsNumber)) {
+      const vestController = new AbortController()
+      const vestTimeout = setTimeout(() => vestController.abort(), FETCH_TIMEOUT_MS)
+      try {
+        const vestResponse = await fetch(
+          `${getBaseUrl()}/v1/vestigingsprofielen/${vestigingsNumber}`,
+          {
+            headers: { apikey: apiKey },
+            signal: vestController.signal,
+          },
+        )
+        if (vestResponse.ok) {
+          const vestData = (await vestResponse.json()) as {
+            adressen?: Array<{
+              type?: string
+              straatnaam?: string
+              huisnummer?: number
+              huisnummerToevoeging?: string
+              toevoegingAdres?: string
+              huisletter?: string
+              postcode?: string
+              plaats?: string
+            }>
+          }
+          if (vestData.adressen?.length) {
+            addresses = vestData.adressen
+          }
+        }
+      } catch {
+        // ignore vestigings fetch errors, fallback to basisprofiel
+      } finally {
+        clearTimeout(vestTimeout)
+      }
+    }
+
     const address = pickAddress(addresses)
 
     const profile: KvkProfile = {
@@ -154,7 +193,10 @@ export default async function handler(request: Request) {
         houseNumber:
           address?.huisnummer !== undefined ? String(address.huisnummer) : '',
         houseNumberAddition:
-          address?.huisnummerToevoeging ?? address?.huisletter ?? '',
+          address?.huisnummerToevoeging ??
+          address?.toevoegingAdres ??
+          address?.huisletter ??
+          '',
         postcode: address?.postcode ?? '',
         city: address?.plaats ?? '',
       },
