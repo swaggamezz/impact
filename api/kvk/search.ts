@@ -26,23 +26,11 @@ const json = (status: number, body: unknown) =>
     headers: JSON_HEADERS,
   })
 
-const getBaseUrl = () => {
-  const override = (process.env.KVK_BASE_URL ?? '').trim()
-  if (override) {
-    return override.replace(/\/$/, '')
-  }
-  const env = (process.env.KVK_ENV ?? 'test').toLowerCase()
-  return env === 'prod'
-    ? 'https://api.kvk.nl/api'
-    : 'https://api.kvk.nl/test/api'
-}
+const FORCED_BASE_URL = 'https://api.kvk.nl/test/api'
+const FORCED_API_KEY = 'l7xx1f2691f2520d487b902f4e0b57a0b197'
 
-const getApiKey = () => {
-  const env = (process.env.KVK_ENV ?? 'test').toLowerCase()
-  if (process.env.KVK_API_KEY) return process.env.KVK_API_KEY
-  if (env === 'test') return 'l7xx1f2691f2520d487b902f4e0b57a0b197'
-  return undefined
-}
+const getBaseUrl = () => FORCED_BASE_URL
+const getApiKey = () => FORCED_API_KEY
 
 export default async function handler(request: Request) {
   try {
