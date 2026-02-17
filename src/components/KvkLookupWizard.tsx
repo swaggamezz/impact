@@ -26,21 +26,8 @@ const formatAddress = (address?: KvkAddress) => {
   return `${line1}, ${line2}`
 }
 
-const getStatusLabel = (status?: KvkProfile['companyActive']) => {
-  if (status === 'inactive') return 'Niet actief'
-  if (status === 'active') return 'Actief'
-  return 'Onbekend'
-}
-
-const getStatusTone = (status?: KvkProfile['companyActive']) => {
-  if (status === 'inactive') {
-    return 'border-red-200 bg-red-50 text-red-700'
-  }
-  if (status === 'active') {
-    return 'border-emerald-200 bg-emerald-50 text-emerald-700'
-  }
-  return 'border-slate-200 bg-slate-50 text-slate-600'
-}
+const pickPrimaryAddress = (profile?: KvkProfile) =>
+  profile?.postalAddress ?? profile?.mainVisitingAddress
 
 export const KvkLookupWizard = ({ onApply }: Props) => {
   const [open, setOpen] = useState(false)
@@ -52,13 +39,12 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
   const [selectedProfile, setSelectedProfile] = useState<KvkProfile | null>(null)
   const [profileError, setProfileError] = useState<string | null>(null)
   const [profileLoading, setProfileLoading] = useState(false)
-  const [selectedSignatory, setSelectedSignatory] = useState<string>('')
   const [successHint, setSuccessHint] = useState<string | null>(null)
   const abortRef = useRef<AbortController | null>(null)
   const debounceRef = useRef<number | undefined>(undefined)
 
   const signatories = selectedProfile?.signatories ?? []
-  const hasMultipleSignatories = signatories.length > 1
+  const primarySignatory = signatories[0]
 
   useEffect(() => {
     if (!open) return
@@ -106,7 +92,6 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
     setProfileLoading(true)
     setProfileError(null)
     setSelectedProfile(null)
-    setSelectedSignatory('')
     setSuccessHint(null)
     try {
       const profile = await getKvkProfile(
@@ -115,9 +100,6 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
         item.vestigingsNumber,
       )
       setSelectedProfile(profile)
-      if (profile.signatories.length === 1) {
-        setSelectedSignatory(profile.signatories[0].name)
-      }
     } catch {
       setProfileError('KVK-profiel ophalen mislukt.')
     } finally {
@@ -127,10 +109,7 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
 
   const handleApply = () => {
     if (!selectedProfile) return
-    const signatory =
-      signatories.find((entry) => entry.name === selectedSignatory) ??
-      (signatories.length === 1 ? signatories[0] : undefined)
-    onApply(selectedProfile, signatory)
+    onApply(selectedProfile, primarySignatory)
     setSuccessHint(
       'Gegevens automatisch ingevuld via KVK - je kunt dit aanpassen.',
     )
@@ -156,6 +135,8 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
           type="button"
           onClick={() => {
             setOpen((prev) => !prev)
+            setStep('search')
+            setSelectedProfile(null)
             setSuccessHint(null)
           }}
           className="rounded-full border border-slate-300 px-3 py-1 text-[11px] font-semibold text-slate-600 transition hover:border-slate-400"
@@ -200,35 +181,6 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                           KvK {item.kvkNumber || '-'}
                           {item.city ? ` - ${item.city}` : ''}
                         </span>
-                        <div className="mt-1 flex flex-wrap gap-2">
-                          {item.type && (
-                            <span className="text-[11px] text-slate-400">
-                              {item.type}
-                            </span>
-                          )}
-                          {item.legalForm && (
-                            <span className="rounded-full border border-slate-200 px-2 py-0.5 text-[10px] text-slate-500">
-                              {item.legalForm}
-                            </span>
-                          )}
-                          {item.active && (
-                            <span
-                              className={`rounded-full border px-2 py-0.5 text-[10px] ${
-                                item.active === 'inactive'
-                                  ? 'border-red-200 bg-red-50 text-red-600'
-                                  : item.active === 'active'
-                                    ? 'border-emerald-200 bg-emerald-50 text-emerald-700'
-                                    : 'border-slate-200 bg-slate-50 text-slate-600'
-                              }`}
-                            >
-                              {item.active === 'inactive'
-                                ? 'Niet actief'
-                                : item.active === 'active'
-                                  ? 'Actief'
-                                  : 'Onbekend'}
-                            </span>
-                          )}
-                        </div>
                       </button>
                     </li>
                   ))}
@@ -251,95 +203,33 @@ export const KvkLookupWizard = ({ onApply }: Props) => {
                     <p className="font-semibold text-slate-800">
                       {selectedProfile.legalName || 'Bedrijfsnaam'}
                     </p>
-                    <div className="flex flex-wrap items-center gap-2 text-slate-500">
-                      <span>KvK {selectedProfile.kvkNumber}</span>
-                      <span
-                        className={`rounded-full border px-2 py-0.5 text-[10px] ${getStatusTone(
-                          selectedProfile.companyActive,
-                        )}`}
-                      >
-                        {getStatusLabel(selectedProfile.companyActive)}
-                      </span>
-                    </div>
-                  </div>
-                  <div className="space-y-1">
-                    <p className="text-slate-500">Rechtsvorm</p>
-                    <p className="text-slate-800">
-                      {selectedProfile.legalForm || '-'}
+                    <p className="text-slate-500">
+                      KvK {selectedProfile.kvkNumber}
                     </p>
                   </div>
                   <div className="space-y-1">
-                    <p className="text-slate-500">Bezoekadres</p>
+                    <p className="text-slate-500">Adres</p>
                     <p className="text-slate-800">
-                      {formatAddress(selectedProfile.mainVisitingAddress)}
+                      {formatAddress(pickPrimaryAddress(selectedProfile))}
                     </p>
                   </div>
-                  <div className="space-y-1">
-                    <p className="text-slate-500">Post-/factuuradres</p>
-                    <p className="text-slate-800">
-                      {formatAddress(selectedProfile.postalAddress)}
-                    </p>
-                  </div>
-                  {selectedProfile.tradeNames &&
-                    selectedProfile.tradeNames.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-slate-500">Handelsnamen</p>
-                        <p className="text-slate-800">
-                          {selectedProfile.tradeNames.join(', ')}
-                        </p>
-                      </div>
-                    )}
-                  {signatories.length > 0 && (
+                  {primarySignatory?.name && (
                     <div className="space-y-1">
-                      <p className="text-slate-500">Tekenbevoegde(n)</p>
-                      {hasMultipleSignatories ? (
-                        <select
-                          value={selectedSignatory}
-                          onChange={(event) =>
-                            setSelectedSignatory(event.target.value)
-                          }
-                          className="w-full rounded-lg border border-slate-200 bg-white px-2 py-1 text-xs text-slate-700"
-                        >
-                          <option value="">Selecteer tekenbevoegde</option>
-                          {signatories.map((entry) => (
-                            <option key={entry.name} value={entry.name}>
-                              {entry.name}
-                              {entry.role ? ` (${entry.role})` : ''}
-                            </option>
-                          ))}
-                        </select>
-                      ) : (
-                        <p className="text-slate-800">
-                          {signatories[0].name}
-                          {signatories[0].role ? ` (${signatories[0].role})` : ''}
-                        </p>
-                      )}
+                      <p className="text-slate-500">Tekenbevoegde</p>
+                      <p className="text-slate-800">
+                        {primarySignatory.name}
+                        {primarySignatory.role
+                          ? ` (${primarySignatory.role})`
+                          : ''}
+                      </p>
                     </div>
                   )}
-                  {selectedProfile.warnings &&
-                    selectedProfile.warnings.length > 0 && (
-                      <div className="space-y-1">
-                        <p className="text-slate-500">Let op</p>
-                        <ul className="space-y-1 text-[11px] text-amber-700">
-                          {selectedProfile.warnings.map((warning, index) => (
-                            <li key={`${warning}-${index}`}>{warning}</li>
-                          ))}
-                        </ul>
-                      </div>
-                    )}
                   {hintVisible && (
                     <div className="rounded-lg border border-emerald-200 bg-emerald-50 px-3 py-2 text-[11px] text-emerald-700">
                       {successHint}
                     </div>
                   )}
                   <div className="flex flex-wrap gap-2 pt-2">
-                    <button
-                      type="button"
-                      onClick={() => setStep('search')}
-                      className="btn-secondary text-xs"
-                    >
-                      Terug
-                    </button>
                     <button
                       type="button"
                       onClick={handleApply}
