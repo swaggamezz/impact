@@ -68,90 +68,95 @@ const pickAddress = (
 }
 
 export default async function handler(request: Request) {
-  if (request.method === 'OPTIONS') {
-    return new Response(null, { status: 204, headers: JSON_HEADERS })
-  }
+  try {
+    if (request.method === 'OPTIONS') {
+      return new Response(null, { status: 204, headers: JSON_HEADERS })
+    }
 
-  if (request.method !== 'GET') {
-    return json(405, { error: 'Method not allowed' })
-  }
+    if (request.method !== 'GET') {
+      return json(405, { error: 'Method not allowed' })
+    }
 
-  const url = new URL(request.url)
-  const kvkNumber = url.searchParams.get('kvkNumber')?.trim() ?? ''
-  if (!/^\d{8}$/.test(kvkNumber)) {
-    return json(400, { error: 'KvK-nummer is ongeldig.' })
-  }
+    const url = new URL(request.url, 'http://localhost')
+    const kvkNumber = url.searchParams.get('kvkNumber')?.trim() ?? ''
+    if (!/^\d{8}$/.test(kvkNumber)) {
+      return json(400, { error: 'KvK-nummer is ongeldig.' })
+    }
 
-  const apiKey = getApiKey()
-  if (!apiKey) {
-    return json(500, { error: 'KVK_API_KEY ontbreekt op de server.' })
-  }
+    const apiKey = getApiKey()
+    if (!apiKey) {
+      return json(500, { error: 'KVK_API_KEY ontbreekt op de server.' })
+    }
 
-  const response = await fetch(
-    `${getBaseUrl()}/v1/basisprofielen/${kvkNumber}`,
-    {
-      headers: { apikey: apiKey },
-    },
-  )
+    const response = await fetch(
+      `${getBaseUrl()}/v1/basisprofielen/${kvkNumber}`,
+      {
+        headers: { apikey: apiKey },
+      },
+    )
 
-  if (response.status === 404) {
-    return json(404, { error: 'Geen KVK-profiel gevonden.' })
-  }
+    if (response.status === 404) {
+      return json(404, { error: 'Geen KVK-profiel gevonden.' })
+    }
 
-  if (!response.ok) {
-    const details = await response.text()
-    return json(response.status, {
-      error: 'KVK-profiel ophalen mislukt.',
-      details: details.slice(0, 800),
-    })
-  }
+    if (!response.ok) {
+      const details = await response.text()
+      return json(response.status, {
+        error: 'KVK-profiel ophalen mislukt.',
+        details: details.slice(0, 800),
+      })
+    }
 
-  const data = (await response.json()) as {
-    kvkNummer?: string
-    naam?: string
-    statutaireNaam?: string
-    handelsnamen?: Array<{ naam?: string }>
-    _embedded?: {
-      hoofdvestiging?: {
-        adressen?: Array<{
-          type?: string
-          straatnaam?: string
-          huisnummer?: number
-          huisnummerToevoeging?: string
-          huisletter?: string
-          postcode?: string
-          plaats?: string
-        }>
-      }
-      eigenaar?: {
-        rechtsvorm?: string
-        uitgebreideRechtsvorm?: string
+    const data = (await response.json()) as {
+      kvkNummer?: string
+      naam?: string
+      statutaireNaam?: string
+      handelsnamen?: Array<{ naam?: string }>
+      _embedded?: {
+        hoofdvestiging?: {
+          adressen?: Array<{
+            type?: string
+            straatnaam?: string
+            huisnummer?: number
+            huisnummerToevoeging?: string
+            huisletter?: string
+            postcode?: string
+            plaats?: string
+          }>
+        }
+        eigenaar?: {
+          rechtsvorm?: string
+          uitgebreideRechtsvorm?: string
+        }
       }
     }
+
+    const addresses = data._embedded?.hoofdvestiging?.adressen ?? []
+    const address = pickAddress(addresses)
+
+    const profile: KvkProfile = {
+      kvkNumber: data.kvkNummer ?? kvkNumber,
+      legalName: data.statutaireNaam ?? data.naam ?? '',
+      tradeName: data.handelsnamen?.[0]?.naam ?? data.naam ?? '',
+      legalForm:
+        data._embedded?.eigenaar?.rechtsvorm ??
+        data._embedded?.eigenaar?.uitgebreideRechtsvorm ??
+        '',
+      address: {
+        street: address?.straatnaam ?? '',
+        houseNumber:
+          address?.huisnummer !== undefined ? String(address.huisnummer) : '',
+        houseNumberAddition:
+          address?.huisnummerToevoeging ?? address?.huisletter ?? '',
+        postcode: address?.postcode ?? '',
+        city: address?.plaats ?? '',
+      },
+      signatories: [],
+    }
+
+    return json(200, profile)
+  } catch (error) {
+    const message = error instanceof Error ? error.message : 'Onbekende fout'
+    return json(500, { error: 'KVK profiel crashed.', details: message })
   }
-
-  const addresses = data._embedded?.hoofdvestiging?.adressen ?? []
-  const address = pickAddress(addresses)
-
-  const profile: KvkProfile = {
-    kvkNumber: data.kvkNummer ?? kvkNumber,
-    legalName: data.statutaireNaam ?? data.naam ?? '',
-    tradeName: data.handelsnamen?.[0]?.naam ?? data.naam ?? '',
-    legalForm:
-      data._embedded?.eigenaar?.rechtsvorm ??
-      data._embedded?.eigenaar?.uitgebreideRechtsvorm ??
-      '',
-    address: {
-      street: address?.straatnaam ?? '',
-      houseNumber:
-        address?.huisnummer !== undefined ? String(address.huisnummer) : '',
-      houseNumberAddition:
-        address?.huisnummerToevoeging ?? address?.huisletter ?? '',
-      postcode: address?.postcode ?? '',
-      city: address?.plaats ?? '',
-    },
-    signatories: [],
-  }
-
-  return json(200, profile)
 }
